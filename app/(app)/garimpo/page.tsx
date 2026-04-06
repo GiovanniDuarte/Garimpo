@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { GemScoreBadge } from '@/components/garimpo/GemScore'
@@ -18,7 +19,11 @@ import {
   ChevronUp,
   Eye,
   Users,
+  Globe2,
+  Link2,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { viewsTotaisBarInnerStyle } from '@/lib/views-totais-bar'
 import { toast } from 'sonner'
 import type { VideoGarimpo } from '@/types'
 import {
@@ -56,6 +61,8 @@ export default function GarimpoPage() {
   const [seedVideoId, setSeedVideoId] = useState<string | null>(null)
   const [referenceChannelId, setReferenceChannelId] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
+  /** youtubeId do canal → id na biblioteca (quando já salvo) */
+  const [savedChannelMap, setSavedChannelMap] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const saved = lerFiltrosGarimpo()
@@ -72,9 +79,36 @@ export default function GarimpoPage() {
     salvarFiltrosGarimpo({ minViews, maxInscritos, dias })
   }, [filtrosHydrated, minViews, maxInscritos, dias])
 
+  useEffect(() => {
+    if (results.length === 0) return
+    const ids = [
+      ...new Set(results.map((r) => r.canal.youtubeId).filter(Boolean)),
+    ]
+    let cancelled = false
+    void fetch('/api/canais/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ youtubeIds: ids }),
+    })
+      .then((r) => r.json())
+      .then((data: { map?: Record<string, string> }) => {
+        if (cancelled || !data.map) return
+        setSavedChannelMap((prev) => ({ ...prev, ...data.map }))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [results])
+
   function sortByGem(videos: VideoGarimpo[]) {
     return [...videos].sort((a, b) => b.gemScore.total - a.gemScore.total)
   }
+
+  const maxCanalViewsInList = useMemo(() => {
+    if (results.length === 0) return 0
+    return Math.max(0, ...results.map((r) => r.canal.totalViews ?? 0))
+  }, [results])
 
   async function handleSearch() {
     if (!query.trim()) {
@@ -186,7 +220,15 @@ export default function GarimpoPage() {
       })
       const data = await res.json()
       if (data.error) toast.error(data.error)
-      else toast.success(`Canal "${data.nome}" salvo na biblioteca.`)
+      else {
+        if (data.id && video.canal.youtubeId) {
+          setSavedChannelMap((prev) => ({
+            ...prev,
+            [video.canal.youtubeId]: data.id as string,
+          }))
+        }
+        toast.success(`Canal "${data.nome}" salvo na biblioteca.`)
+      }
     } catch {
       toast.error('Erro ao salvar.')
     } finally {
@@ -205,23 +247,23 @@ export default function GarimpoPage() {
 
           {/* ── Search bar ── */}
           <div className="space-y-3">
-            <div className="flex gap-2">
+            <div className="flex items-stretch gap-2">
               {/* Search input */}
-              <div className="flex flex-1 items-center gap-2 rounded-full border border-[#303030] bg-[#121212] px-4 py-2.5 shadow-inner transition-colors focus-within:border-[#717171]">
+              <div className="flex h-10 min-h-10 min-w-0 flex-1 items-center gap-2 rounded-full border border-[#303030] bg-[#121212] px-4 shadow-inner transition-colors focus-within:border-[#717171]">
                 <Search className="h-4 w-4 shrink-0 text-[#aaaaaa]" />
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   placeholder="Palavras-chave ou URL do vídeo…"
-                  className="border-0 bg-transparent p-0 text-sm text-white placeholder:text-[#717171] focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="h-9 min-h-0 border-0 bg-transparent p-0 text-sm text-white placeholder:text-[#717171] focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
               </div>
 
               {/* Search button */}
               <Button
                 size="default"
-                className="rounded-full px-5 font-semibold shadow-sm"
+                className="h-10 min-h-10 shrink-0 rounded-full px-5 font-semibold shadow-sm"
                 onClick={handleSearch}
                 disabled={loading || loadingMore}
                 id="btn-garimpar"
@@ -235,8 +277,9 @@ export default function GarimpoPage() {
 
               {/* Filters toggle */}
               <button
+                type="button"
                 onClick={() => setFiltersOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-full border border-[#303030] bg-[#212121] px-4 py-2.5 text-sm font-medium text-[#aaaaaa] transition-colors hover:border-[#717171] hover:text-white"
+                className="flex h-10 min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-[#303030] bg-[#212121] px-4 text-sm font-medium text-[#aaaaaa] transition-colors hover:border-[#717171] hover:text-white"
                 aria-expanded={filtersOpen}
               >
                 <SlidersHorizontal className="h-4 w-4" />
@@ -330,11 +373,18 @@ export default function GarimpoPage() {
               <div className="space-y-3">
                 {results.map((video) => {
                   const busy = savingId === video.youtubeId
+                  const canalYt = video.canal.youtubeId
+                  const bibliotecaId = canalYt
+                    ? savedChannelMap[canalYt]
+                    : undefined
                   return (
                     <VideoCard
                       key={video.youtubeId}
                       video={video}
                       busy={busy}
+                      saved={Boolean(bibliotecaId)}
+                      bibliotecaId={bibliotecaId}
+                      maxCanalViewsInList={maxCanalViewsInList}
                       onSave={handleSave}
                       onSetReference={setAsReference}
                     />
@@ -373,91 +423,179 @@ export default function GarimpoPage() {
 
 /* ── Sub-components ────────────────────────────────── */
 
+/** Botões Referência / Salvar / Perfil — mais baixos que a pílula Gem. */
+const garimpoActionBtn =
+  'flex h-7 w-full min-w-0 items-center justify-center gap-1 rounded-full px-2 text-[10px] font-semibold leading-none transition-colors'
+
+/** Altura da linha no desktop = thumbnail 16:9 em w-44 (11rem). */
+const garimpoRowSmH = 'sm:h-[calc(11rem*9/16)]'
+
 function VideoCard({
   video,
   busy,
+  saved,
+  bibliotecaId,
+  maxCanalViewsInList,
   onSave,
   onSetReference,
 }: {
   video: VideoGarimpo
   busy: boolean
+  saved: boolean
+  bibliotecaId?: string
+  maxCanalViewsInList: number
   onSave: (v: VideoGarimpo) => void
   onSetReference: (v: VideoGarimpo) => void
 }) {
-  return (
-    <div className="group flex flex-col gap-3 rounded-xl border border-[#272727] bg-[#181818] p-3 transition-colors hover:border-[#3f3f3f] hover:bg-[#212121] sm:flex-row sm:gap-4 sm:p-4">
-      {/* Thumbnail */}
-      <a
-        href={video.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="relative aspect-video w-full shrink-0 overflow-hidden rounded-lg sm:w-52"
-      >
-        <img
-          src={video.thumbnailUrl}
-          alt=""
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
-        {/* Duration badge placeholder – shown as overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-      </a>
+  const totalCanalViews = video.canal.totalViews ?? 0
+  const viewsBarPct =
+    maxCanalViewsInList > 0
+      ? Math.min(
+          100,
+          Math.round((totalCanalViews / maxCanalViewsInList) * 1000) / 10
+        )
+      : 0
+  const viewsBarTitle =
+    maxCanalViewsInList > 0
+      ? `Views totais do canal: ${formatCompact(totalCanalViews)} (${viewsBarPct.toFixed(0)}% do maior desta listagem: ${formatCompact(maxCanalViewsInList)})`
+      : totalCanalViews > 0
+        ? `Views totais do canal: ${formatCompact(totalCanalViews)}`
+        : 'Views totais do canal não disponíveis para comparar nesta listagem'
 
-      {/* Info */}
-      <div className="flex min-w-0 flex-1 flex-col gap-2 py-0.5">
+  return (
+    <div
+      className={cn(
+        'group rounded-xl border bg-[#181818] p-2 transition-colors sm:p-2',
+        saved
+          ? 'border-emerald-500/25 hover:border-emerald-500/35'
+          : 'border-[#272727] hover:border-[#3f3f3f] hover:bg-[#1c1c1c]'
+      )}
+    >
+      <div
+        className={cn(
+          'flex flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-3',
+          garimpoRowSmH
+        )}
+      >
+        {/* Thumbnail — no desktop define a altura da linha */}
         <a
           href={video.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="line-clamp-2 text-sm font-semibold leading-snug text-white hover:text-primary sm:text-base"
+          className="relative aspect-video w-full shrink-0 overflow-hidden rounded-md sm:aspect-auto sm:h-full sm:w-44 sm:min-h-0"
         >
-          {video.titulo}
+          <img
+            src={video.thumbnailUrl}
+            alt=""
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
         </a>
 
-        <p className="text-xs font-medium text-[#aaaaaa]">{video.canal.nome}</p>
-
-        <div className="flex flex-wrap items-center gap-2 text-xs text-[#717171]">
-          <span className="flex items-center gap-1">
-            <Eye className="h-3 w-3" />
-            {formatCompact(video.views)} views
-          </span>
-          <span>•</span>
-          <span className="flex items-center gap-1">
-            <Users className="h-3 w-3" />
-            {formatCompact(video.canal.inscritos)} inscritos
-          </span>
-          {video.canal.totalViews != null && video.canal.totalViews > 0 && (
-            <>
-              <span>•</span>
-              <span>{formatCompact(video.canal.totalViews)} views totais</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Actions + GemScore */}
-      <div className="flex shrink-0 flex-row flex-wrap items-center gap-2 sm:flex-col sm:items-end sm:justify-between">
-        <GemScoreBadge score={video.gemScore} size="lg" />
-        <div className="flex items-center gap-2 sm:flex-col sm:items-end">
-          <button
-            onClick={() => onSetReference(video)}
-            title="Usar como referência"
-            className="flex items-center gap-1.5 rounded-full border border-[#303030] bg-transparent px-3 py-1.5 text-xs font-medium text-[#aaaaaa] transition-colors hover:border-[#717171] hover:text-white"
+        {/* Centro: compacto para caber na altura da thumbnail */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden sm:py-0">
+          <a
+            href={video.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="line-clamp-2 text-xs font-semibold leading-tight text-white hover:text-primary sm:line-clamp-1 sm:text-[13px]"
           >
-            <Crosshair className="h-3.5 w-3.5" />
-            Referência
-          </button>
-          <button
-            onClick={() => onSave(video)}
-            disabled={busy}
-            className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            {video.titulo}
+          </a>
+
+          <a
+            href={video.canal.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="line-clamp-1 w-fit text-[11px] font-medium text-[#aaaaaa] hover:text-white"
           >
-            {busy ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <BookmarkPlus className="h-3.5 w-3.5" />
+            {video.canal.nome}
+          </a>
+
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0 text-[10px] text-[#717171] sm:text-[11px]">
+            <span className="inline-flex items-center gap-0.5 tabular-nums">
+              <Eye className="h-3 w-3 shrink-0 opacity-80" />
+              {formatCompact(video.views)} views
+            </span>
+            <span className="inline-flex items-center gap-0.5 tabular-nums">
+              <Users className="h-3 w-3 shrink-0 opacity-80" />
+              {formatCompact(video.canal.inscritos)} inscritos
+            </span>
+            {video.canal.totalViews != null && video.canal.totalViews > 0 && (
+              <span className="inline-flex min-w-0 items-center gap-0.5 truncate tabular-nums">
+                <Globe2 className="h-3 w-3 shrink-0 opacity-80" />
+                {formatCompact(video.canal.totalViews)} views totais
+              </span>
             )}
-            Salvar canal
-          </button>
+          </div>
+
+          <div className="mt-0.5 h-1 w-full max-w-md overflow-hidden rounded-full bg-[#272727]">
+            <div
+              className="h-full min-w-0 rounded-full transition-[width] duration-300"
+              style={viewsTotaisBarInnerStyle(viewsBarPct)}
+              title={viewsBarTitle}
+            />
+          </div>
+        </div>
+
+        {/* Direita: pílula Gem baixa + ações (link no lugar de «Salvo») */}
+        <div className="flex w-full shrink-0 flex-col justify-center gap-1.5 border-t border-[#272727]/80 pt-2 sm:w-[10.25rem] sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
+          <div
+            className="w-full min-w-0"
+            title="Gem Score (a barra ao lado = views totais do canal, cor conforme o volume)"
+          >
+            <GemScoreBadge
+              score={video.gemScore}
+              size="xs"
+              fullWidth
+            />
+          </div>
+
+          <div className="flex w-full flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={() => onSetReference(video)}
+              title="Usar como referência na próxima busca"
+              className={cn(
+                garimpoActionBtn,
+                'cursor-pointer border-[#303030] bg-[#212121] text-[#cccccc] hover:border-[#717171] hover:text-white'
+              )}
+            >
+              <Crosshair className="h-3 w-3 shrink-0" />
+              Referência
+            </button>
+
+            {saved && bibliotecaId ? (
+              <Link
+                href={`/biblioteca/${bibliotecaId}`}
+                className={cn(
+                  garimpoActionBtn,
+                  'cursor-pointer border-[#303030] bg-[#212121] text-[#cccccc] hover:border-[#717171] hover:text-white'
+                )}
+                title="Abrir ficha do canal na biblioteca"
+              >
+                <Link2 className="h-3 w-3 shrink-0" />
+                Perfil Canal
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSave(video)}
+                disabled={busy}
+                className={cn(
+                  garimpoActionBtn,
+                  'cursor-pointer border-transparent bg-primary text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+                )}
+              >
+                {busy ? (
+                  <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                ) : (
+                  <BookmarkPlus className="h-3 w-3 shrink-0" />
+                )}
+                Salvar canal
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -470,13 +608,21 @@ function VideoSkeletons() {
       {Array.from({ length: 5 }).map((_, i) => (
         <div
           key={i}
-          className="flex gap-4 rounded-xl border border-[#272727] bg-[#181818] p-4"
+          className="rounded-xl border border-[#272727] bg-[#181818] p-2"
         >
-          <Skeleton className="h-28 w-48 shrink-0 rounded-lg bg-[#272727]" />
-          <div className="flex flex-1 flex-col justify-center space-y-3">
-            <Skeleton className="h-4 w-3/4 rounded bg-[#272727]" />
-            <Skeleton className="h-3 w-1/3 rounded bg-[#272727]" />
-            <Skeleton className="h-3 w-1/2 rounded bg-[#272727]" />
+          <div className="flex flex-col gap-2 sm:h-[calc(11rem*9/16)] sm:flex-row sm:items-stretch sm:gap-3">
+            <Skeleton className="aspect-video w-full shrink-0 rounded-md sm:aspect-auto sm:h-full sm:w-44 bg-[#272727]" />
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-1 sm:overflow-hidden">
+              <Skeleton className="h-3.5 w-full max-w-xl rounded bg-[#272727]" />
+              <Skeleton className="h-3 w-40 rounded bg-[#272727]" />
+              <Skeleton className="h-3 w-56 rounded bg-[#272727]" />
+              <Skeleton className="mt-0.5 h-1 w-full max-w-md rounded-full bg-[#272727]" />
+            </div>
+            <div className="flex w-full shrink-0 flex-col justify-center gap-1.5 border-t border-[#272727]/80 pt-2 sm:w-[10.25rem] sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
+              <Skeleton className="h-9 w-full rounded-full bg-[#272727]" />
+              <Skeleton className="h-7 w-full rounded-full bg-[#272727]" />
+              <Skeleton className="h-7 w-full rounded-full bg-[#272727]" />
+            </div>
           </div>
         </div>
       ))}

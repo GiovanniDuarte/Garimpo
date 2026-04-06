@@ -4,9 +4,10 @@ export interface PotencialModelagem {
   icvPercent: number | null
   vg: number | null
   ageMonths: number | null
-  ipmBruto: number | null
-  ipmMultiplicativo: number | null
-  ipmIndice: number | null
+  mpmBruto: number | null
+  mpmMultiplicativo: number | null
+  /** Medida de Potencial de Modelagem — índice 0–100 (tipo “gema”). */
+  mpmIndice: number | null
   frequenciaOk: boolean | null
   icvAlto: boolean | null
   canalJovem: boolean | null
@@ -125,22 +126,22 @@ export function calcularPotencialModelagem(input: {
   const ageMonths = created ? idadeCanalEmMeses(created) : null
   const vg = tv > 0 && ageMonths != null ? tv / ageMonths : null
 
-  let ipmBruto: number | null = null
+  let mpmBruto: number | null = null
   if (mvv != null && icvPercent != null && vg != null) {
-    ipmBruto = mvv * 0.5 + icvPercent * 1000 + vg * 0.3
+    mpmBruto = mvv * 0.5 + icvPercent * 1000 + vg * 0.3
   }
 
-  let ipmMultiplicativo: number | null = null
+  let mpmMultiplicativo: number | null = null
   if (mvv != null && icv != null && ageMonths != null && icv > 0) {
-    ipmMultiplicativo = (mvv * icv * 100) / Math.sqrt(ageMonths)
+    mpmMultiplicativo = (mvv * icv * 100) / Math.sqrt(ageMonths)
   }
 
-  let ipmIndice: number | null = null
+  let mpmIndice: number | null = null
   if (mvv != null && icvPercent != null && vg != null) {
     const sMvv = normLog(mvv, 6)
     const sIcv = clamp((icvPercent / 6) * 100, 0, 100)
     const sVg = normLog(vg, 6.5)
-    ipmIndice = Math.round(sMvv * 0.35 + sIcv * 0.35 + sVg * 0.3)
+    mpmIndice = Math.round(sMvv * 0.35 + sIcv * 0.35 + sVg * 0.3)
   }
 
   const frequenciaOk = frequenciaSatisfazModelagem(
@@ -164,9 +165,9 @@ export function calcularPotencialModelagem(input: {
     icvPercent,
     vg,
     ageMonths,
-    ipmBruto,
-    ipmMultiplicativo,
-    ipmIndice,
+    mpmBruto,
+    mpmMultiplicativo,
+    mpmIndice,
     frequenciaOk,
     icvAlto,
     canalJovem,

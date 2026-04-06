@@ -15,7 +15,7 @@ const meta: Record<
     className: 'bg-amber-500/20 text-amber-300',
   },
   pronto_raio_x: {
-    label: 'Raio-X pronto',
+    label: 'Mochila pronta',
     className: 'bg-[#ff0000]/20 text-red-200',
   },
   modelando: {

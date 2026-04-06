@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { GemScoreBadge } from '@/components/garimpo/GemScore'
 import { ChannelStatusBadge } from '@/components/biblioteca/ChannelStatusBadge'
-import { IpmBadge } from '@/components/biblioteca/PotencialModelagemPanel'
+import { MpmBadge } from '@/components/biblioteca/PotencialModelagemPanel'
 import {
   Select,
   SelectContent,
@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Library, RefreshCw, Loader2, Trash2, Search, Users, Eye } from 'lucide-react'
+import { viewsTotaisBarInnerStyle } from '@/lib/views-totais-bar'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import type { CanalStatus, GemScoreDetalhado, PotencialModelagem } from '@/types'
@@ -108,6 +109,11 @@ export default function BibliotecaPage() {
     canal.nome.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  const maxTotalViewsList = useMemo(() => {
+    if (filteredCanais.length === 0) return 0
+    return Math.max(0, ...filteredCanais.map((c) => c.totalViews ?? 0))
+  }, [filteredCanais])
+
   return (
     <>
       <Header
@@ -117,18 +123,18 @@ export default function BibliotecaPage() {
       <PageWrapper>
         <div className="space-y-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex flex-1 items-center gap-2 rounded-full border border-[#303030] bg-[#121212] px-4 py-2.5 transition-colors focus-within:border-[#717171]">
+            <div className="flex h-10 min-h-10 flex-1 items-center gap-2 rounded-full border border-[#303030] bg-[#121212] px-4 transition-colors focus-within:border-[#717171]">
               <Search className="h-4 w-4 shrink-0 text-[#aaaaaa]" />
               <Input
                 placeholder="Buscar canal…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="border-0 bg-transparent p-0 text-sm text-white placeholder:text-[#717171] focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="h-9 border-0 bg-transparent p-0 text-sm text-white placeholder:text-[#717171] focus-visible:ring-0 focus-visible:ring-offset-0"
               />
             </div>
 
             <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
-              <SelectTrigger className="w-full rounded-full border-[#303030] bg-[#212121] text-sm text-[#aaaaaa] sm:w-44">
+              <SelectTrigger className="h-10 min-h-10 w-full rounded-full border-[#303030] bg-[#212121] py-0 text-sm text-[#aaaaaa] sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -136,19 +142,20 @@ export default function BibliotecaPage() {
                 <SelectItem value="novo">Novo</SelectItem>
                 <SelectItem value="analisando">Analisando</SelectItem>
                 <SelectItem value="promissor">Promissor</SelectItem>
-                <SelectItem value="pronto_raio_x">Raio-X Pronto</SelectItem>
+                <SelectItem value="pronto_raio_x">Mochila pronta</SelectItem>
                 <SelectItem value="modelando">Modelando</SelectItem>
                 <SelectItem value="descartado">Descartado</SelectItem>
               </SelectContent>
             </Select>
 
             <Select value={orderBy} onValueChange={(v) => v && setOrderBy(v)}>
-              <SelectTrigger className="w-full rounded-full border-[#303030] bg-[#212121] text-sm text-[#aaaaaa] sm:w-44">
+              <SelectTrigger className="h-10 min-h-10 w-full rounded-full border-[#303030] bg-[#212121] py-0 text-sm text-[#aaaaaa] sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="criadoEm">Data adicionado</SelectItem>
                 <SelectItem value="gemScore">Gem Score</SelectItem>
+                <SelectItem value="mpm">MPM (modelagem)</SelectItem>
                 <SelectItem value="inscritos">Inscritos</SelectItem>
                 <SelectItem value="nome">Nome</SelectItem>
               </SelectContent>
@@ -183,6 +190,20 @@ export default function BibliotecaPage() {
                   }
                 }
                 const isRefreshing = refreshingId === canal.id
+                const totalV = canal.totalViews ?? 0
+                const viewsBarPct =
+                  maxTotalViewsList > 0
+                    ? Math.min(
+                        100,
+                        Math.round((totalV / maxTotalViewsList) * 1000) / 10
+                      )
+                    : 0
+                const viewsBarTitle =
+                  maxTotalViewsList > 0
+                    ? `Views totais do canal: ${formatNum(totalV)} (${viewsBarPct.toFixed(0)}% face ao maior desta listagem: ${formatNum(maxTotalViewsList)})`
+                    : totalV > 0
+                      ? `Views totais: ${formatNum(totalV)}`
+                      : 'Views totais não disponíveis'
 
                 return (
                   <div
@@ -214,7 +235,7 @@ export default function BibliotecaPage() {
                           </h3>
                           <ChannelStatusBadge status={canal.status as CanalStatus} />
                           {canal.potencialModelagem && (
-                            <IpmBadge potencial={canal.potencialModelagem} />
+                            <MpmBadge potencial={canal.potencialModelagem} />
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#717171]">
@@ -238,6 +259,13 @@ export default function BibliotecaPage() {
                           {canal._count.videos > 0 && (
                             <span>{canal._count.videos} vídeos salvos</span>
                           )}
+                        </div>
+                        <div className="h-1 w-full overflow-hidden rounded-full bg-[#272727]">
+                          <div
+                            className="h-full min-w-0 rounded-full transition-[width] duration-300"
+                            style={viewsTotaisBarInnerStyle(viewsBarPct)}
+                            title={viewsBarTitle}
+                          />
                         </div>
                       </div>
                     </Link>
@@ -286,6 +314,7 @@ function ChannelSkeletons() {
           <div className="flex flex-1 flex-col gap-2">
             <Skeleton className="h-4 w-1/3 rounded bg-[#272727]" />
             <Skeleton className="h-3 w-1/2 rounded bg-[#272727]" />
+            <Skeleton className="h-1 w-full rounded-full bg-[#272727]" />
           </div>
         </div>
       ))}

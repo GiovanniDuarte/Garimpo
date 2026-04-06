@@ -6,7 +6,6 @@ import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { GemScoreBadge, GemScorePanel } from '@/components/garimpo/GemScore'
 import { ChannelStatusBadge } from '@/components/biblioteca/ChannelStatusBadge'
-import { PotencialModelagemPanel } from '@/components/biblioteca/PotencialModelagemPanel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -29,12 +28,20 @@ import {
   Check,
   X,
   ArrowLeft,
+  Loader2,
+  Package,
+  Download,
+  AlertCircle,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { buttonVariants } from '@/components/ui/button'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import type { CanalStatus, GemScoreDetalhado } from '@/types'
-import { calcularIdadeCanal } from '@/lib/scraper/channel-info'
-import { calcularPotencialModelagem } from '@/lib/scoring/potencial-modelagem'
+import {
+  calcularIdadeCanal,
+  resolverDataReferenciaIdadeCanal,
+} from '@/lib/scraper/channel-info'
 
 interface CanalData {
   id: string
@@ -65,6 +72,8 @@ interface CanalData {
     dataPublicacao: string | null
     duracaoSegundos: number | null
   }>
+  mochilaAt: string | null
+  mochilaVideoCount: number | null
 }
 
 export default function CanalDetailPage({
@@ -82,6 +91,8 @@ export default function CanalDetailPage({
   const [isDeleting, setIsDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmVideoId, setConfirmVideoId] = useState<string | null>(null)
+  const [mochilaN, setMochilaN] = useState<7 | 15 | 25>(7)
+  const [mochilaBusy, setMochilaBusy] = useState(false)
 
   useEffect(() => {
     if (confirmDelete) {
@@ -162,6 +173,36 @@ export default function CanalDetailPage({
     }
   }
 
+  async function handleGerarMochila() {
+    if (!canal || canal.videos.length === 0) {
+      toast.error('Salve vídeos no canal antes de gerar a mochila.')
+      return
+    }
+    setMochilaBusy(true)
+    try {
+      const res = await fetch(`/api/canais/${canalId}/mochila`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count: mochilaN }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Erro ao gerar mochila.')
+        return
+      }
+      if (data.canal) {
+        setCanal(data.canal)
+        toast.success(
+          `Mochila gerada com ${data.mochilaVideoCount} vídeo(s). Podes descarregar o ZIP abaixo.`
+        )
+      }
+    } catch {
+      toast.error('Erro de rede ao gerar mochila.')
+    } finally {
+      setMochilaBusy(false)
+    }
+  }
+
   async function handleDeleteVideo(videoId: string, e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
@@ -214,31 +255,45 @@ export default function CanalDetailPage({
     }
   }
 
-  const potencialModelagem = calcularPotencialModelagem({
-    inscritos: canal.inscritos,
-    totalViews: canal.totalViews,
-    videosPublicados: canal.videosPublicados,
-    dataCriacaoCanal: canal.dataCriacaoCanal,
-    frequenciaPostagem: canal.frequenciaPostagem,
-    videosSalvosCount: canal.videos.length,
-  })
+  const dataRefIdade = resolverDataReferenciaIdadeCanal(
+    canal.videos,
+    canal.dataCriacaoCanal
+  )
 
   const topVideos = [...canal.videos]
     .sort((a, b) => (b.views || 0) - (a.views || 0))
     .slice(0, 10)
 
-  const idadeCanal =
-    canal.dataCriacaoCanal &&
-    !isNaN(new Date(canal.dataCriacaoCanal).getTime())
-      ? calcularIdadeCanal(new Date(canal.dataCriacaoCanal))
-      : null
+  const idadeCanal = dataRefIdade ? calcularIdadeCanal(dataRefIdade) : null
+  const idadeHint =
+    canal.videos.some(
+      (v) =>
+        v.dataPublicacao != null &&
+        !isNaN(new Date(v.dataPublicacao).getTime())
+    )
+      ? 'Desde a data do vídeo mais antigo com data na biblioteca.'
+      : 'Sem datas nos vídeos guardados; usa a data de criação do canal no YouTube.'
 
   return (
     <>
       <Header
         title={canal.nome}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {canal.mochilaAt && (
+              <a
+                href={`/api/canais/${canalId}/mochila`}
+                download
+                className={cn(
+                  buttonVariants({ variant: 'default', size: 'sm' }),
+                  'rounded-full font-semibold shadow-sm'
+                )}
+                title="Guardar o ficheiro .zip no computador"
+              >
+                <Download className="size-3.5" />
+                Salvar mochila (ZIP)
+              </a>
+            )}
             <Select
               value={canal.status}
               onValueChange={(v) => v && handleStatusChange(v)}
@@ -250,7 +305,7 @@ export default function CanalDetailPage({
                 <SelectItem value="novo">Novo</SelectItem>
                 <SelectItem value="analisando">Analisando</SelectItem>
                 <SelectItem value="promissor">Promissor</SelectItem>
-                <SelectItem value="pronto_raio_x">Raio-X Pronto</SelectItem>
+                <SelectItem value="pronto_raio_x">Mochila pronta</SelectItem>
                 <SelectItem value="modelando">Modelando</SelectItem>
                 <SelectItem value="descartado">Descartado</SelectItem>
               </SelectContent>
@@ -287,20 +342,21 @@ export default function CanalDetailPage({
           {/* Back link */}
           <Link
             href="/biblioteca"
-            className="inline-flex items-center gap-1.5 text-xs text-[#aaaaaa] transition-colors hover:text-white"
+            className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[#aaaaaa] transition-colors hover:text-white"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Biblioteca
           </Link>
 
-          {/* ── Channel hero ── */}
+          {/* ── Channel hero (compacto: faixa fina em vez de banner alto vazio) ── */}
           <section className="overflow-hidden rounded-2xl border border-[#272727] bg-[#181818]">
-            {/* Banner placeholder */}
-            <div className="h-28 bg-gradient-to-br from-[#272727] to-[#1a1a1a]" />
+            <div
+              className="h-1 bg-gradient-to-r from-[#272727] via-primary/40 to-[#272727]"
+              aria-hidden
+            />
 
-            <div className="flex flex-col gap-4 px-6 pb-6 sm:flex-row sm:items-end">
-              {/* Avatar – overlaps banner */}
-              <div className="-mt-10 flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-[#181818] bg-[#272727]">
+            <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:gap-5 sm:px-6 sm:py-5">
+              <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#272727] bg-[#272727] sm:size-[4.5rem] sm:border-[3px]">
                 {canal.thumbnailUrl ? (
                   <img
                     src={`/api/canais/${canalId}/avatar`}
@@ -308,13 +364,13 @@ export default function CanalDetailPage({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <span className="text-3xl font-bold text-[#aaaaaa]">
+                  <span className="text-2xl font-bold text-[#aaaaaa] sm:text-3xl">
                     {canal.nome.charAt(0)}
                   </span>
                 )}
               </div>
 
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-bold text-white">{canal.nome}</h2>
                   <ChannelStatusBadge status={canal.status as CanalStatus} />
@@ -324,7 +380,7 @@ export default function CanalDetailPage({
                   href={canal.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-xs text-[#aaaaaa] hover:text-primary"
+                  className="flex cursor-pointer items-center gap-1 text-xs text-[#aaaaaa] hover:text-primary"
                 >
                   {canal.url.replace('https://www.youtube.com/', 'youtube.com/')}
                   <ExternalLink className="h-3 w-3" />
@@ -343,9 +399,45 @@ export default function CanalDetailPage({
             <MetricCard icon={Users} label="Inscritos" value={canal.inscritos ? formatNum(canal.inscritos) : '—'} />
             <MetricCard icon={Eye} label="Views totais" value={canal.totalViews != null && canal.totalViews > 0 ? formatNum(canal.totalViews) : '—'} />
             <MetricCard icon={Video} label="Vídeos" value={canal.videosPublicados ? formatNum(canal.videosPublicados) : '—'} />
-            <MetricCard icon={Calendar} label="Idade" value={idadeCanal || '—'} />
+            <MetricCard
+              icon={Calendar}
+              label="Idade"
+              value={idadeCanal || '—'}
+              title={idadeHint}
+            />
             <MetricCard icon={Clock} label="Frequência" value={canal.frequenciaPostagem || '—'} />
           </section>
+
+          {canal.status === 'pronto_raio_x' && !canal.mochilaAt && (
+            <div
+              role="status"
+              className="flex gap-3 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+            >
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+              <div className="min-w-0 space-y-1">
+                <p className="font-semibold text-amber-50">
+                  Status «Mochila pronta» sem ZIP no servidor
+                </p>
+                <p className="text-amber-100/90">
+                  O estado do canal indica que a mochila está pronta, mas ainda não foi
+                  gerado o arquivo .zip (ou foi apagado). Gere a mochila na secção{' '}
+                  <a
+                    href="#mochila"
+                    className="font-semibold text-white underline decoration-amber-400/80 underline-offset-2 hover:text-amber-50"
+                  >
+                    Mochila
+                  </a>{' '}
+                  abaixo para poder salvar no computador.
+                </p>
+                {canal.videos.length === 0 && (
+                  <p className="text-amber-100/80">
+                    Este canal ainda não tem vídeos na biblioteca — usa «Atualizar» na
+                    lista da biblioteca para sincronizar antes de gerar.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── Nicho ── */}
           <section className="rounded-xl border border-[#272727] bg-[#181818] p-4">
@@ -391,13 +483,87 @@ export default function CanalDetailPage({
             </div>
           </section>
 
+          {/* ── Mochila (ZIP) ── */}
+          <section
+            id="mochila"
+            className="scroll-mt-24 rounded-xl border border-[#272727] bg-[#181818] p-5"
+          >
+            <div className="mb-3 flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" />
+              <h3 className="text-sm font-semibold text-white">Mochila</h3>
+            </div>
+            <p className="mb-4 text-sm text-[#aaaaaa]">
+              Gera um <strong className="text-white">.zip</strong> com os teus
+              vídeos mais vistos na biblioteca. Cada pasta chama-se{' '}
+              <strong className="text-white">título do vídeo — id</strong>, com{' '}
+              <code className="text-[#e8e8e8]">ficha.txt</code>,{' '}
+              <code className="text-[#e8e8e8]">roteiro.txt</code>,{' '}
+              <code className="text-[#e8e8e8]">comentarios_top16.txt</code> (16
+              comentários com mais curtidas) e{' '}
+              <code className="text-[#e8e8e8]">thumbnail</code>. Dados via
+              InnerTube. Ao gerar de novo, o ZIP anterior é substituído.
+            </p>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-[#717171]">Quantidade:</span>
+                {([7, 15, 25] as const).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setMochilaN(n)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                      mochilaN === n
+                        ? 'bg-primary text-primary-foreground'
+                        : 'border border-[#303030] bg-[#212121] text-[#aaaaaa] hover:bg-[#272727]'
+                    }`}
+                  >
+                    Top {n}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={mochilaBusy || canal.videos.length === 0}
+                  onClick={() => void handleGerarMochila()}
+                >
+                  {mochilaBusy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Package className="mr-2 h-4 w-4" />
+                  )}
+                  {canal.mochilaAt ? 'Gerar mochila de novo' : 'Gerar mochila'}
+                </Button>
+                {canal.mochilaAt && (
+                  <a
+                    href={`/api/canais/${canalId}/mochila`}
+                    download
+                    className={cn(
+                      buttonVariants({ variant: 'secondary', size: 'sm' }),
+                      'rounded-full font-semibold'
+                    )}
+                  >
+                    <Download className="size-3.5" />
+                    Salvar ZIP
+                  </a>
+                )}
+              </div>
+            </div>
+            {canal.mochilaAt && (
+              <p className="mt-3 text-xs text-[#717171]">
+                Última mochila:{' '}
+                {new Date(canal.mochilaAt).toLocaleString('pt-BR')} —{' '}
+                {canal.mochilaVideoCount ?? '—'} vídeo(s) no arquivo
+              </p>
+            )}
+          </section>
+
           {/* ── Gem Score Panel ── */}
           {gemScore && (
             <GemScorePanel score={gemScore} totalViewsCanal={canal.totalViews} />
           )}
-
-          {/* ── Potencial de Modelagem ── */}
-          <PotencialModelagemPanel potencial={potencialModelagem} />
 
           {/* ── Top Vídeos ── */}
           {topVideos.length > 0 && (
@@ -430,7 +596,7 @@ export default function CanalDetailPage({
                       href={v.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="min-w-0 flex-1 truncate text-sm text-white hover:text-primary"
+                      className="min-w-0 flex-1 cursor-pointer truncate text-sm text-white hover:text-primary"
                     >
                       {v.titulo}
                     </a>
@@ -470,13 +636,18 @@ function MetricCard({
   icon: Icon,
   label,
   value,
+  title,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
   value: string
+  title?: string
 }) {
   return (
-    <div className="rounded-xl border border-[#272727] bg-[#181818] p-4">
+    <div
+      className="rounded-xl border border-[#272727] bg-[#181818] p-4"
+      title={title}
+    >
       <div className="mb-2 flex items-center gap-1.5 text-[#717171]">
         <Icon className="h-3.5 w-3.5" />
         <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>

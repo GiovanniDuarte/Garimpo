@@ -1,5 +1,6 @@
 import { prisma } from './prisma'
 import type { CanalStatus } from '@/types'
+import { removerArquivoMochila } from '@/lib/mochila/paths'
 
 export async function listarCanais(filtros?: {
   status?: CanalStatus
@@ -24,8 +25,33 @@ export async function listarCanais(filtros?: {
   return prisma.canal.findMany({
     where,
     orderBy,
-    include: { _count: { select: { videos: true, projetos: true } } },
+    include: {
+      _count: { select: { videos: true, projetos: true } },
+      videos: {
+        where: { dataPublicacao: { not: null } },
+        orderBy: { dataPublicacao: 'asc' },
+        take: 1,
+        select: { dataPublicacao: true },
+      },
+    },
   })
+}
+
+/** Mapa youtubeId → id interno (canais já na biblioteca). */
+export async function mapYoutubeIdsParaIds(
+  youtubeIds: string[]
+): Promise<Record<string, string>> {
+  const unique = [...new Set(youtubeIds.filter(Boolean))]
+  if (unique.length === 0) return {}
+  const rows = await prisma.canal.findMany({
+    where: { youtubeId: { in: unique } },
+    select: { id: true, youtubeId: true },
+  })
+  const out: Record<string, string> = {}
+  for (const r of rows) {
+    if (r.youtubeId) out[r.youtubeId] = r.id
+  }
+  return out
 }
 
 export async function buscarCanal(id: string) {
@@ -33,8 +59,6 @@ export async function buscarCanal(id: string) {
     where: { id },
     include: {
       videos: { orderBy: { views: 'desc' } },
-      analise: true,
-      projetos: true,
     },
   })
 }
@@ -83,12 +107,15 @@ export async function atualizarCanal(
     thumbnailUrl: string
     avatarLocal: string | null
     pais: string
+    mochilaAt: Date
+    mochilaVideoCount: number
   }>
 ) {
   return prisma.canal.update({ where: { id }, data })
 }
 
 export async function removerCanal(id: string) {
+  await removerArquivoMochila(id)
   return prisma.canal.delete({ where: { id } })
 }
 

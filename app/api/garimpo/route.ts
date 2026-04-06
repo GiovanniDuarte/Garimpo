@@ -8,7 +8,9 @@ import {
   getRelatedVideosPage,
   type SearchResult,
 } from '@/lib/scraper/youtube'
+import { parseJoinDateYoutube } from '@/lib/scraper/channel-info'
 import { calcularGemScore } from '@/lib/scoring/gem-score'
+import { calcularPotencialModelagem } from '@/lib/scoring/potencial-modelagem'
 import type { VideoGarimpo } from '@/types'
 
 const CHANNEL_FETCH_CONCURRENCY = 5
@@ -65,33 +67,88 @@ async function enrichSearchResults(
   })
 
   const enrichedRows = await mapWithConcurrency(filtered, CHANNEL_FETCH_CONCURRENCY, async (s) => {
+    // O browseId vindo do HTML (ex. lockup: avatar) pode não ser o canal do vídeo;
+    // o player devolve o channelId real do upload, alinhado com nome/biblioteca.
+    let resolvedChannelId = s.channelId
+    try {
+      const details = await getVideoDetails(s.videoId)
+      if (details.channelId) resolvedChannelId = details.channelId
+    } catch {
+      // mantém s.channelId
+    }
+
     let subs = 0
     let channelThumb = ''
-    let totalViews = channelTotalViews.get(s.channelId) ?? 0
-    if (s.channelId) {
+    let totalViews = channelTotalViews.get(resolvedChannelId) ?? 0
+    let videoCount = 0
+    let joinDateStr = ''
+    let channelName = s.channelName
+    let channelUrl = s.channelUrl
+    if (resolvedChannelId) {
       try {
-        const info = await getChannelInfo(s.channelId)
+        const info = await getChannelInfo(resolvedChannelId)
         subs = info.subscribers
         channelThumb = info.avatar
         totalViews = info.totalViews || 0
-        channelTotalViews.set(s.channelId, totalViews)
+        videoCount = info.videoCount || 0
+        joinDateStr = info.joinDate || ''
+        channelTotalViews.set(resolvedChannelId, totalViews)
+        if (info.name) channelName = info.name
+        if (info.url) channelUrl = info.url
       } catch {
         subs = 0
       }
     }
-    return { s, subs, channelThumb, totalViews }
+    return {
+      s,
+      subs,
+      channelThumb,
+      totalViews,
+      videoCount,
+      joinDateStr,
+      resolvedChannelId,
+      channelName,
+      channelUrl,
+    }
   })
 
   const out: VideoGarimpo[] = []
 
   for (const row of enrichedRows) {
-    const { s, subs, channelThumb, totalViews } = row
+    const {
+      s,
+      subs,
+      channelThumb,
+      totalViews,
+      videoCount,
+      joinDateStr,
+      resolvedChannelId,
+      channelName,
+      channelUrl,
+    } = row
+    if (
+      opts.excludeChannelId &&
+      resolvedChannelId &&
+      resolvedChannelId === opts.excludeChannelId
+    ) {
+      continue
+    }
     if (subs > opts.maxInscritos) continue
 
     const pubDate =
       parsePublishedDate(s.publishedText) || new Date(Date.now() - 86400000)
     const dias = Math.max(1, (Date.now() - pubDate.getTime()) / 86400000)
     const viewsPorDia = s.views / dias
+
+    const joinParsed = joinDateStr
+      ? parseJoinDateYoutube(joinDateStr)
+      : undefined
+    const potencial = calcularPotencialModelagem({
+      inscritos: Math.max(1, subs),
+      totalViews,
+      videosPublicados: videoCount > 0 ? videoCount : undefined,
+      dataCriacaoCanal: joinParsed,
+    })
 
     const gemScore = calcularGemScore(
       { views: s.views, dataPublicacao: pubDate },
@@ -100,7 +157,8 @@ async function enrichSearchResults(
         topVideos: [{ views: s.views }],
         totalViews,
       },
-      undefined
+      undefined,
+      potencial.mpmIndice
     )
 
     out.push({
@@ -113,9 +171,13 @@ async function enrichSearchResults(
       duracaoSegundos: s.duration,
       viewsPorDia,
       canal: {
-        youtubeId: s.channelId,
-        nome: s.channelName,
-        url: s.channelUrl,
+        youtubeId: resolvedChannelId,
+        nome: channelName,
+        url:
+          channelUrl ||
+          (resolvedChannelId
+            ? `https://www.youtube.com/channel/${resolvedChannelId}`
+            : s.channelUrl),
         inscritos: subs,
         thumbnailUrl: channelThumb,
         totalViews,

@@ -44,3 +44,6 @@ next-env.d.ts
 /prisma/*.db
 /public/avatars
 /public/thumbnails
+
+# mochilas ZIP geradas localmente
+/data/mochilas/

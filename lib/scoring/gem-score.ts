@@ -1,5 +1,15 @@
 import type { GemScoreDetalhado } from '@/types'
 
+const MPM_BONUS_MAX = 8
+
+function pontosBonusMpm(mpmIndice: number | null | undefined): number {
+  if (mpmIndice == null || isNaN(mpmIndice)) return 0
+  return Math.min(
+    MPM_BONUS_MAX,
+    Math.round(Math.min(100, Math.max(0, mpmIndice)) * 0.08)
+  )
+}
+
 export function calcularGemScore(
   video: { views: number; dataPublicacao: Date },
   canal: {
@@ -7,7 +17,8 @@ export function calcularGemScore(
     topVideos: { views: number }[]
     totalViews?: number
   },
-  nicho?: { rpmMedio: number; viralidade: number }
+  nicho?: { rpmMedio: number; viralidade: number },
+  mpmIndice?: number | null
 ): GemScoreDetalhado {
   const dias = Math.max(
     1,
@@ -48,7 +59,7 @@ export function calcularGemScore(
       ? 0
       : Math.min(10, ((Math.log10(tv) - logLo) / (logHi - logLo)) * 10)
 
-  const total = Math.round(
+  const totalBase = Math.round(
     ptsPorInscrito +
       ptsVelocidade +
       ptsConsistencia +
@@ -56,8 +67,11 @@ export function calcularGemScore(
       ptsAlcance
   )
 
+  const pontosMpm = pontosBonusMpm(mpmIndice)
+  const total = Math.min(100, totalBase + pontosMpm)
+
   const result: GemScoreDetalhado = {
-    total: Math.min(100, total),
+    total,
     breakdown: {
       viewsPorInscrito: Math.round(ptsPorInscrito),
       velocidade: Math.round(ptsVelocidade),
@@ -73,6 +87,13 @@ export function calcularGemScore(
           : total >= 25
             ? 'mediano'
             : 'fraco',
+  }
+
+  if (pontosMpm > 0 && mpmIndice != null && !isNaN(mpmIndice)) {
+    result.mpmBonus = {
+      mpmIndice: Math.round(mpmIndice),
+      pontos: pontosMpm,
+    }
   }
 
   if (nicho) {

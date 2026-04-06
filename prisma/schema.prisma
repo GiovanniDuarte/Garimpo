@@ -30,6 +30,8 @@ model Canal {
   thumbnailUrl       String?
   avatarLocal        String?
   pais               String?
+  mochilaAt          DateTime?
+  mochilaVideoCount  Int?
   criadoEm           DateTime  @default(now())
   atualizadoEm       DateTime  @updatedAt
 

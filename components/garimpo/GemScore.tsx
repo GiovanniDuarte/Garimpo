@@ -2,11 +2,6 @@
 
 import { cn } from '@/lib/utils'
 import type { GemScoreDetalhado } from '@/types'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { Gauge, Rocket, Layers, Scale, Globe2, Sparkles } from 'lucide-react'
 
 const MAX = {
@@ -31,65 +26,97 @@ function normalizeBreakdown(
 
 const tierMeta: Record<
   GemScoreDetalhado['classificacao'],
-  { bg: string; text: string; label: string; hint: string; ring: string }
+  {
+    bg: string
+    text: string
+    label: string
+    shortLabel: string
+    hint: string
+    ring: string
+    bar: string
+  }
 > = {
   pepita: {
     bg: 'bg-gem-pepita-bg',
     text: 'text-gem-pepita-text',
     label: 'Pepita',
+    shortLabel: 'Pep',
     hint: 'Desempenho excepcional em relação ao tamanho do canal e ao alcance.',
     ring: 'stroke-emerald-400',
+    bar: 'bg-emerald-500',
   },
   promissor: {
     bg: 'bg-gem-promissor-bg',
     text: 'text-gem-promissor-text',
     label: 'Promissor',
+    shortLabel: 'Pro',
     hint: 'Boa tração, velocidade ou consistência — vale acompanhar de perto.',
     ring: 'stroke-amber-400',
+    bar: 'bg-amber-500',
   },
   mediano: {
     bg: 'bg-gem-mediano-bg',
     text: 'text-gem-mediano-text',
     label: 'Mediano',
+    shortLabel: 'Med',
     hint: 'Dentro do esperado para o perfil.',
     ring: 'stroke-red-400/70',
+    bar: 'bg-sky-500',
   },
   fraco: {
     bg: 'bg-gem-fraco-bg',
     text: 'text-gem-fraco-text',
     label: 'Fraco',
+    shortLabel: 'Fr',
     hint: 'Pouco destaque frente ao tamanho do canal ou ao histórico de views.',
     ring: 'stroke-red-400/80',
+    bar: 'bg-zinc-500',
   },
+}
+
+/** Cor da barra de progresso (lista Garimpo) alinhada à classificação. */
+export function gemScoreBarClass(
+  classificacao: GemScoreDetalhado['classificacao']
+): string {
+  return tierMeta[classificacao]?.bar ?? tierMeta.fraco.bar
 }
 
 interface GemScoreProps {
   score: GemScoreDetalhado
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
   showBreakdown?: boolean
+  /** Rótulo curto (ex.: Pep) para listagens compactas. */
+  compact?: boolean
+  /** Estica a pílula à largura do contentor (ex.: coluna Garimpo). */
+  fullWidth?: boolean
 }
 
 export function GemScoreBadge({
   score,
   size = 'md',
   showBreakdown = false,
+  compact = false,
+  fullWidth = false,
 }: GemScoreProps) {
   const tier = tierMeta[score.classificacao] || tierMeta.fraco
-  const breakdown = normalizeBreakdown(score.breakdown)
+  const tierLabel = compact ? tier.shortLabel : tier.label
 
   const badge = (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full font-medium shadow-sm ring-1 ring-white/10',
+        'inline-flex items-center gap-1.5 rounded-full font-medium shadow-sm ring-1 ring-inset ring-white/10',
+        fullWidth && 'w-full justify-center',
         tier.bg,
         tier.text,
+        size === 'xs' &&
+          'max-w-full gap-1 px-2.5 py-1.5 text-[11px] leading-snug',
         size === 'sm' && 'px-2 py-0.5 text-xs',
         size === 'md' && 'px-2.5 py-1 text-xs',
         size === 'lg' && 'px-3 py-1.5 text-sm'
       )}
     >
       <span className="tabular-nums font-bold">{score.total}</span>
-      <span className="opacity-90">{tier.label}</span>
+      <span className="opacity-90">{tierLabel}</span>
     </span>
   )
 
@@ -98,23 +125,12 @@ export function GemScoreBadge({
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger className="inline-flex cursor-default border-0 bg-transparent p-0">
-        {badge}
-      </TooltipTrigger>
-      <TooltipContent
-        side="bottom"
-        className="max-w-xs border border-border bg-popover text-popover-foreground"
-      >
-        <p className="mb-2 text-xs font-medium text-foreground">
-          Como o Gem Score é montado
-        </p>
-        <TooltipBreakdownList breakdown={breakdown} />
-        <p className="mt-2 border-t border-border pt-2 text-[11px] text-muted-foreground">
-          {tier.hint}
-        </p>
-      </TooltipContent>
-    </Tooltip>
+    <span
+      className={cn('inline-flex', fullWidth && 'w-full')}
+      aria-label={`Gem Score ${score.total}, ${tier.label}`}
+    >
+      {badge}
+    </span>
   )
 }
 
@@ -138,7 +154,7 @@ export function GemScorePanel({
             <h3 className="text-lg font-semibold tracking-tight">Gem Score</h3>
             <span
               className={cn(
-                'rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ring-white/10',
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shadow-sm ring-1 ring-inset ring-white/10',
                 tier.bg,
                 tier.text
               )}
@@ -209,6 +225,24 @@ export function GemScorePanel({
           barClass="bg-cyan-500"
         />
       </div>
+
+      {score.mpmBonus && (
+        <div className="border-t border-[#272727] bg-muted/30 px-5 py-4">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Bónus MPM (modelagem)
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <strong className="font-semibold text-foreground">
+              +{score.mpmBonus.pontos} pontos
+            </strong>{' '}
+            com base no índice de potencial de modelagem{' '}
+            <span className="tabular-nums font-medium text-foreground">
+              {score.mpmBonus.mpmIndice}
+            </span>
+            . Este valor entra no total do Gem acima.
+          </p>
+        </div>
+      )}
 
       {nb && (
         <div className="border-t border-[#272727] bg-primary/5 px-5 py-4">
@@ -319,32 +353,6 @@ function ScoreRow({
         />
       </div>
     </div>
-  )
-}
-
-function TooltipBreakdownList({
-  breakdown,
-}: {
-  breakdown: GemScoreDetalhado['breakdown']
-}) {
-  const rows = [
-    ['Views/inscrito', breakdown.viewsPorInscrito, MAX.viewsPorInscrito],
-    ['Velocidade', breakdown.velocidade, MAX.velocidade],
-    ['Consistência', breakdown.consistencia, MAX.consistencia],
-    ['Tamanho', breakdown.tamanhoCanal, MAX.tamanhoCanal],
-    ['Alcance', breakdown.alcanceCanal, MAX.alcanceCanal],
-  ] as const
-  return (
-    <ul className="space-y-1 text-[11px]">
-      {rows.map(([label, v, m]) => (
-        <li key={label} className="flex justify-between gap-4">
-          <span className="text-muted-foreground">{label}</span>
-          <span className="tabular-nums font-medium">
-            {v}/{m}
-          </span>
-        </li>
-      ))}
-    </ul>
   )
 }
 

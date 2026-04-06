@@ -23,6 +23,11 @@ export interface GemScoreDetalhado {
     viralidade: number
     potencialOuro: number
   }
+  /** Bónus do índice MPM (potencial de modelagem) aplicado ao total. */
+  mpmBonus?: {
+    mpmIndice: number
+    pontos: number
+  }
 }
 
 export type { PotencialModelagem } from '@/lib/scoring/potencial-modelagem'

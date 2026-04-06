@@ -11,7 +11,10 @@ import {
   getVideoDetails,
   parsePublishedDate,
 } from '@/lib/scraper/youtube'
-import { calcularFrequencia } from '@/lib/scraper/channel-info'
+import {
+  calcularFrequencia,
+  parseJoinDateYoutube,
+} from '@/lib/scraper/channel-info'
 import { calcularGemScore } from '@/lib/scoring/gem-score'
 import { detectarNicho, NICHOS } from '@/lib/nichos'
 import { getCanalAvatarCached, clearCanalAvatarFiles } from '@/lib/canal-avatar-cache'
@@ -23,35 +26,58 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status') as CanalStatus | null
   const categoria = searchParams.get('categoria')
   const tag = searchParams.get('tag')
-  const orderBy = searchParams.get('orderBy') as
+  const orderByParam = searchParams.get('orderBy') as
     | 'criadoEm'
     | 'gemScore'
     | 'inscritos'
     | 'nome'
+    | 'mpm'
     | null
   const orderDir = searchParams.get('orderDir') as 'asc' | 'desc' | null
+
+  const dbOrderBy =
+    orderByParam && orderByParam !== 'mpm' ? orderByParam : undefined
 
   const canais = await listarCanais({
     status: status || undefined,
     categoria: categoria || undefined,
     tag: tag || undefined,
-    orderBy: orderBy || undefined,
+    orderBy: dbOrderBy || undefined,
     orderDir: orderDir || undefined,
   })
 
-  const withPotencial = canais.map((c) => ({
-    ...c,
-    potencialModelagem: calcularPotencialModelagem({
-      inscritos: c.inscritos,
-      totalViews: c.totalViews,
-      videosPublicados: c.videosPublicados,
-      dataCriacaoCanal: c.dataCriacaoCanal,
-      frequenciaPostagem: c.frequenciaPostagem,
-      videosSalvosCount: c._count.videos,
-    }),
-  }))
+  const withPotencial = canais.map((c) => {
+    const dataRefIdade =
+      c.videos[0]?.dataPublicacao ?? c.dataCriacaoCanal
+    const { videos: _videosIdade, ...canalJson } = c
+    return {
+      ...canalJson,
+      potencialModelagem: calcularPotencialModelagem({
+        inscritos: c.inscritos,
+        totalViews: c.totalViews,
+        videosPublicados: c.videosPublicados,
+        dataCriacaoCanal: dataRefIdade,
+        frequenciaPostagem: c.frequenciaPostagem,
+        videosSalvosCount: c._count.videos,
+      }),
+    }
+  })
 
-  return NextResponse.json(withPotencial)
+  let list = withPotencial
+
+  if (orderByParam === 'mpm') {
+    const asc = orderDir === 'asc'
+    list = [...list].sort((a, b) => {
+      const av = a.potencialModelagem.mpmIndice
+      const bv = b.potencialModelagem.mpmIndice
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      return asc ? av - bv : bv - av
+    })
+  }
+
+  return NextResponse.json(list)
 }
 
 export async function POST(req: NextRequest) {
@@ -255,7 +281,7 @@ async function enrichChannelData(body: {
       pais: info.country || undefined,
       idiomaPrincipal: 'en',
       dataCriacaoCanal: info.joinDate
-        ? parseJoinDate(info.joinDate)
+        ? parseJoinDateYoutube(info.joinDate)
         : undefined,
       url: info.url || body.url || `https://www.youtube.com/channel/${channelId}`,
     }
@@ -308,6 +334,13 @@ async function enrichChannelData(body: {
 
       if (topVideos.length > 0) {
         const best = topVideos[0]
+        const potencial = calcularPotencialModelagem({
+          inscritos: subs,
+          totalViews: enrichedData.totalViews ?? 0,
+          videosPublicados: enrichedData.videosPublicados,
+          dataCriacaoCanal: enrichedData.dataCriacaoCanal,
+          frequenciaPostagem: enrichedData.frequenciaPostagem,
+        })
         const gemScore = calcularGemScore(
           {
             views: best.views,
@@ -319,7 +352,8 @@ async function enrichChannelData(body: {
             topVideos: topVideos.map((v) => ({ views: v.views })),
             totalViews: enrichedData.totalViews ?? 0,
           },
-          nichoData
+          nichoData,
+          potencial.mpmIndice
         )
         enrichedData.gemScore = gemScore.total
         enrichedData.gemScoreDetalhado = JSON.stringify(gemScore)
@@ -330,16 +364,6 @@ async function enrichChannelData(body: {
   }
 
   return enrichedData
-}
-
-function parseJoinDate(text: string): Date | undefined {
-  try {
-    const date = new Date(text)
-    if (!isNaN(date.getTime())) return date
-  } catch {
-    // ignore
-  }
-  return undefined
 }
 
 function parsePublishedText(text: string): Date | null {
