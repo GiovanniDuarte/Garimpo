@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./garimpo.db"
+}
+
+model Canal {
+  id                 String    @id @default(cuid())
+  nome               String
+  url                String    @unique
+  youtubeId          String    @unique
+  inscritos          Int?
+  totalViews         Int?
+  videosPublicados   Int?
+  dataCriacaoCanal   DateTime?
+  ultimaAtividade    DateTime?
+  frequenciaPostagem String?
+  nichoInferido      String?
+  idiomaPrincipal    String?
+  descricao          String?
+  gemScore           Float?
+  gemScoreDetalhado  String?
+  status             String    @default("novo")
+  categorias         String?
+  tags               String?
+  notas              String?
+  thumbnailUrl       String?
+  avatarLocal        String?
+  pais               String?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+
+  videos   Video[]
+  analise  AnaliseDNA?
+  projetos Projeto[]
+}
+
+model Video {
+  id                  String    @id @default(cuid())
+  youtubeId           String    @unique
+  canalId             String
+  titulo              String
+  url                 String
+  descricao           String?
+  thumbnailUrl        String?
+  thumbnailLocal      String?
+  tags                String?
+  views               Int?
+  likes               Int?
+  comentarios         Int?
+  dataPublicacao      DateTime?
+  duracaoSegundos     Int?
+  viewsPorDia         Float?
+  viewsPorInscrito    Float?
+  transcript          String?
+  hookTranscript      String?
+  comentariosTopJson  String?
+  usadoNoRaioX        Boolean   @default(false)
+  ordemNoRaioX        Int?
+  criadoEm            DateTime  @default(now())
+
+  canal Canal @relation(fields: [canalId], references: [id], onDelete: Cascade)
+}
+
+model AnaliseDNA {
+  id                   String   @id @default(cuid())
+  canalId              String   @unique
+  videosAnalisados     Int?
+  videosIds            String?
+  padraoTitulos        String?
+  padraoThumbnails     String?
+  padraoRoteiro        String?
+  palavrasRecorrentes  String?
+  temasRecorrentes     String?
+  gatilhosDetectados   String?
+  doresExploradas      String?
+  tipoAudiencia        String?
+  resumoEditorial      String?
+  replicabilidade      String?
+  replicabilidadeMotivo String?
+  isFaceless           Boolean  @default(false)
+  formulaTitulo        String?
+  formulaVisual        String?
+  formulaRoteiro       String?
+  formulaHook          String?
+  raw                  String?
+
+  canal Canal @relation(fields: [canalId], references: [id], onDelete: Cascade)
+}
+
+model AnaliseDNAHistorico {
+  id        String   @id @default(cuid())
+  canalId   String
+  snapshot  String
+  criadoEm  DateTime @default(now())
+}
+
+model Projeto {
+  id          String   @id @default(cuid())
+  nome        String
+  descricao   String?
+  status      String   @default("ativo")
+  canalBaseId String?
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  canalBase Canal? @relation(fields: [canalBaseId], references: [id], onDelete: SetNull)
+  ideias    Ideia[]
+}
+
+model Ideia {
+  id         String   @id @default(cuid())
+  projetoId  String
+  titulo     String
+  conteudo   String?
+  status     String   @default("rascunho")
+  criadoEm   DateTime @default(now())
+
+  projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+}
