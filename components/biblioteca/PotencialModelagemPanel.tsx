@@ -58,7 +58,7 @@ export function PotencialModelagemPanel({
 
   if (!hasAny) {
     return (
-      <section className="rounded-xl border border-border bg-card/50 p-5 text-sm text-muted-foreground">
+      <section className="rounded-xl border border-[#272727] bg-[#181818] p-5 text-sm text-[#717171]">
         <p className="flex items-center gap-2 font-medium text-foreground">
           <Calculator className="h-4 w-4" />
           Potencial de modelagem (IPM)
@@ -72,8 +72,8 @@ export function PotencialModelagemPanel({
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-gradient-to-b from-card to-card/80 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border bg-muted/15 px-5 py-4">
+    <section className="overflow-hidden rounded-xl border border-[#272727] bg-[#181818] shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#272727] bg-[#212121]/60 px-5 py-4">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
             <Calculator className="h-5 w-5 text-primary" />
@@ -85,7 +85,7 @@ export function PotencialModelagemPanel({
           </p>
         </div>
         {potencial.ipmIndice != null && (
-          <div className="flex flex-col items-end rounded-lg border border-border bg-background/80 px-4 py-2">
+          <div className="flex flex-col items-end rounded-lg border border-[#272727] bg-[#272727] px-4 py-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               IPM
             </span>
@@ -98,7 +98,7 @@ export function PotencialModelagemPanel({
       </div>
 
       <div className="grid gap-4 p-5 sm:grid-cols-3">
-        <div className="rounded-lg border border-border bg-muted/10 p-3">
+        <div className="rounded-lg border border-[#272727] bg-[#272727]/40 p-3">
           <div className="flex items-center gap-2 text-primary">
             <BarChart3 className="h-4 w-4" />
             <span className="text-sm font-semibold">MVV</span>
@@ -136,7 +136,7 @@ export function PotencialModelagemPanel({
       </div>
 
       {potencial.sinais.length > 0 && (
-        <div className="border-t border-border bg-amber-500/5 px-5 py-4">
+        <div className="border-t border-[#272727] bg-amber-500/5 px-5 py-4">
           <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-amber-200/90">
             <Lightbulb className="h-3.5 w-3.5" />
             Leituras

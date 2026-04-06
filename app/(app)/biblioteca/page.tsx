@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Library, RefreshCw, Loader2, Trash2, Search } from 'lucide-react'
+import { Library, RefreshCw, Loader2, Trash2, Search, Users, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import type { CanalStatus, GemScoreDetalhado, PotencialModelagem } from '@/types'
@@ -64,18 +64,18 @@ export default function BibliotecaPage() {
     setLoading(false)
   }
 
-  async function handleDeleteChannel(
-    id: string,
-    nome: string,
-    e: React.MouseEvent
-  ) {
+  async function handleDeleteChannel(id: string, nome: string, e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
     if (!confirm(`Remover "${nome}" da biblioteca?`)) return
     try {
-      await fetch(`/api/canais/${id}`, { method: 'DELETE' })
-      toast.success(`"${nome}" removido.`)
-      setCanais((prev) => prev.filter((c) => c.id !== id))
+      const res = await fetch(`/api/canais/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success(`"${nome}" removido.`)
+        setCanais((prev) => prev.filter((c) => c.id !== id))
+      } else {
+        toast.error('Erro ao remover canal.')
+      }
     } catch {
       toast.error('Erro ao remover canal.')
     }
@@ -104,7 +104,7 @@ export default function BibliotecaPage() {
     }
   }
 
-  const filteredCanais = canais.filter(canal => 
+  const filteredCanais = canais.filter((canal) =>
     canal.nome.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -115,94 +115,67 @@ export default function BibliotecaPage() {
         description="Canais salvos e organizados para análise"
       />
       <PageWrapper>
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row flex-wrap items-end gap-4 bg-card/40 p-4 rounded-2xl border border-white/5 backdrop-blur-md">
-            
-            <div className="space-y-1.5 flex-1 min-w-[200px] w-full">
-              <label className="text-xs font-medium text-muted-foreground ml-1">Buscar na Biblioteca</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input 
-                  placeholder="Nome do canal..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 w-full bg-card/60 backdrop-blur-sm border-white/5 shadow-sm rounded-xl h-10" 
-                />
-              </div>
+        <div className="space-y-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-1 items-center gap-2 rounded-full border border-[#303030] bg-[#121212] px-4 py-2.5 transition-colors focus-within:border-[#717171]">
+              <Search className="h-4 w-4 shrink-0 text-[#aaaaaa]" />
+              <Input
+                placeholder="Buscar canal…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="border-0 bg-transparent p-0 text-sm text-white placeholder:text-[#717171] focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
             </div>
 
-            <div className="space-y-1.5 flex-1 sm:max-w-[220px] min-w-[140px]">
-              <label className="text-xs font-medium text-muted-foreground ml-1">Status</label>
-              <Select
-                value={statusFilter}
-                onValueChange={(v) => v && setStatusFilter(v)}
-              >
-                <SelectTrigger className="w-full bg-card/60 backdrop-blur-sm border-white/5 shadow-sm rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os Status</SelectItem>
-                  <SelectItem value="novo">Novo</SelectItem>
-                  <SelectItem value="analisando">Analisando</SelectItem>
-                  <SelectItem value="promissor">Promissor</SelectItem>
-                  <SelectItem value="pronto_raio_x">Raio-X Pronto</SelectItem>
-                  <SelectItem value="modelando">Modelando</SelectItem>
-                  <SelectItem value="descartado">Descartado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
+              <SelectTrigger className="w-full rounded-full border-[#303030] bg-[#212121] text-sm text-[#aaaaaa] sm:w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os status</SelectItem>
+                <SelectItem value="novo">Novo</SelectItem>
+                <SelectItem value="analisando">Analisando</SelectItem>
+                <SelectItem value="promissor">Promissor</SelectItem>
+                <SelectItem value="pronto_raio_x">Raio-X Pronto</SelectItem>
+                <SelectItem value="modelando">Modelando</SelectItem>
+                <SelectItem value="descartado">Descartado</SelectItem>
+              </SelectContent>
+            </Select>
 
-            <div className="space-y-1.5 flex-1 sm:max-w-[220px] min-w-[140px]">
-              <label className="text-xs font-medium text-muted-foreground ml-1">
-                Ordenar por
-              </label>
-              <Select
-                value={orderBy}
-                onValueChange={(v) => v && setOrderBy(v)}
-              >
-                <SelectTrigger className="w-full bg-card/60 backdrop-blur-sm border-white/5 shadow-sm rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="criadoEm">Data adicionado</SelectItem>
-                  <SelectItem value="gemScore">Gem Score</SelectItem>
-                  <SelectItem value="inscritos">Inscritos</SelectItem>
-                  <SelectItem value="nome">Nome</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={orderBy} onValueChange={(v) => v && setOrderBy(v)}>
+              <SelectTrigger className="w-full rounded-full border-[#303030] bg-[#212121] text-sm text-[#aaaaaa] sm:w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="criadoEm">Data adicionado</SelectItem>
+                <SelectItem value="gemScore">Gem Score</SelectItem>
+                <SelectItem value="inscritos">Inscritos</SelectItem>
+                <SelectItem value="nome">Nome</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
+          {!loading && canais.length > 0 && (
+            <p className="text-sm text-[#aaaaaa]">
+              <span className="font-semibold text-white">{filteredCanais.length}</span>{' '}
+              {filteredCanais.length === 1 ? 'canal' : 'canais'}
+            </p>
+          )}
+
           {loading ? (
-            <div className="grid gap-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-24 w-full rounded-2xl bg-card/40 border border-white/5" />
-              ))}
-            </div>
+            <ChannelSkeletons />
           ) : canais.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground bg-card/30 rounded-3xl border border-white/5">
-              <Library className="mb-4 h-12 w-12 opacity-30" />
-              <p className="text-lg font-medium">Sua Biblioteca está vazia</p>
-              <p className="text-sm">Use o Garimpo para encontrar e salvar canais promissores.</p>
-            </div>
+            <EmptyLibrary />
           ) : filteredCanais.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground bg-card/30 rounded-3xl border border-white/5">
-              <Search className="mb-4 h-12 w-12 opacity-30" />
-              <p className="text-lg font-medium">Nenhum canal encontrado</p>
-              <p className="text-sm">Tente buscar por outro termo.</p>
-            </div>
+            <EmptySearch />
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {filteredCanais.map((canal) => {
                 let gemScoreData: GemScoreDetalhado | null = null
                 if (canal.gemScoreDetalhado) {
                   try {
                     const parsed = JSON.parse(canal.gemScoreDetalhado)
-                    if (
-                      parsed?.total != null &&
-                      parsed?.breakdown &&
-                      parsed?.classificacao
-                    ) {
+                    if (parsed?.total != null && parsed?.breakdown && parsed?.classificacao) {
                       gemScoreData = parsed
                     }
                   } catch {
@@ -212,84 +185,88 @@ export default function BibliotecaPage() {
                 const isRefreshing = refreshingId === canal.id
 
                 return (
-                  <Link
+                  <div
                     key={canal.id}
-                    href={`/biblioteca/${canal.id}`}
-                    className="group flex flex-col sm:flex-row items-start sm:items-center gap-5 rounded-2xl border border-white/5 bg-card/60 p-5 transition-all duration-300 hover:bg-card hover:shadow-lg hover:border-primary/30 hover:scale-[1.01]"
+                    className="group flex items-center gap-4 rounded-xl border border-[#272727] bg-[#181818] p-4 transition-colors hover:border-[#3f3f3f] hover:bg-[#212121]"
                   >
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary/80 ring-2 ring-background group-hover:ring-primary/20 transition-all shadow-inner">
-                      {canal.thumbnailUrl ? (
-                        <img
-                          src={`/api/canais/${canal.id}/avatar`}
-                          alt={canal.nome}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-2xl font-bold text-muted-foreground">
-                          {canal.nome.charAt(0)}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="truncate text-lg font-bold tracking-tight group-hover:text-primary transition-colors">{canal.nome}</h3>
-                        <ChannelStatusBadge
-                          status={canal.status as CanalStatus}
-                        />
-                        {canal.potencialModelagem && (
-                          <IpmBadge potencial={canal.potencialModelagem} />
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-muted-foreground/80">
-                        {canal.inscritos != null && canal.inscritos > 0 && (
-                          <span className="flex items-center gap-1.5 rounded-full bg-secondary/50 px-2.5 py-0.5 text-foreground/90">
-                            {formatNum(canal.inscritos)} inscritos
+                    <Link
+                      href={`/biblioteca/${canal.id}`}
+                      className="flex min-w-0 flex-1 items-center gap-4"
+                    >
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#272727] ring-2 ring-[#0f0f0f]">
+                        {canal.thumbnailUrl ? (
+                          <img
+                            src={`/api/canais/${canal.id}/avatar`}
+                            alt={canal.nome}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xl font-bold text-[#aaaaaa]">
+                            {canal.nome.charAt(0)}
                           </span>
                         )}
-                        {canal.totalViews != null && canal.totalViews > 0 && (
-                          <span
-                            className="flex items-center gap-1.5 rounded-full bg-secondary/50 px-2.5 py-0.5 text-foreground/90"
-                            title="Views totais do canal"
-                          >
-                            {formatNum(canal.totalViews)} views (canal)
-                          </span>
-                        )}
-                        {canal.frequenciaPostagem && (
-                          <span className="text-xs uppercase tracking-wider">{canal.frequenciaPostagem}</span>
-                        )}
                       </div>
-                    </div>
 
-                    <div className="flex flex-wrap items-center gap-3 sm:ml-4">
-                      {gemScoreData && (
-                        <GemScoreBadge score={gemScoreData} size="md" />
-                      )}
-                      <div className="flex gap-1 ml-auto sm:ml-0">
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-sm font-semibold text-white group-hover:text-primary">
+                            {canal.nome}
+                          </h3>
+                          <ChannelStatusBadge status={canal.status as CanalStatus} />
+                          {canal.potencialModelagem && (
+                            <IpmBadge potencial={canal.potencialModelagem} />
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#717171]">
+                          {canal.inscritos != null && canal.inscritos > 0 && (
+                            <span className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {formatNum(canal.inscritos)}
+                            </span>
+                          )}
+                          {canal.totalViews != null && canal.totalViews > 0 && (
+                            <span className="flex items-center gap-1">
+                              <Eye className="h-3 w-3" />
+                              {formatNum(canal.totalViews)} views
+                            </span>
+                          )}
+                          {canal.frequenciaPostagem && (
+                            <span className="uppercase tracking-wide">
+                              {canal.frequenciaPostagem}
+                            </span>
+                          )}
+                          {canal._count.videos > 0 && (
+                            <span>{canal._count.videos} vídeos salvos</span>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+
+                    <div className="flex shrink-0 items-center gap-3">
+                      {gemScoreData && <GemScoreBadge score={gemScoreData} size="md" />}
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={(e) => handleRefreshChannel(canal.id, e)}
                           disabled={isRefreshing}
-                          className="rounded-xl p-2 text-muted-foreground transition-all duration-200 hover:bg-secondary hover:text-primary disabled:opacity-50"
+                          className="rounded-full p-2 text-[#717171] transition-colors hover:bg-[#272727] hover:text-white disabled:opacity-40"
                           title="Atualizar dados"
                         >
                           {isRefreshing ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
-                            <RefreshCw className="h-5 w-5" />
+                            <RefreshCw className="h-4 w-4" />
                           )}
                         </button>
                         <button
-                          onClick={(e) =>
-                            handleDeleteChannel(canal.id, canal.nome, e)
-                          }
-                          className="rounded-xl p-2 text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive"
+                          onClick={(e) => handleDeleteChannel(canal.id, canal.nome, e)}
+                          className="rounded-full p-2 text-[#717171] transition-colors hover:bg-red-500/15 hover:text-red-400"
                           title="Remover canal"
                         >
-                          <Trash2 className="h-5 w-5" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
-                  </Link>
+                  </div>
                 )
               })}
             </div>
@@ -297,6 +274,44 @@ export default function BibliotecaPage() {
         </div>
       </PageWrapper>
     </>
+  )
+}
+
+function ChannelSkeletons() {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-4 rounded-xl border border-[#272727] bg-[#181818] p-4">
+          <Skeleton className="h-14 w-14 shrink-0 rounded-full bg-[#272727]" />
+          <div className="flex flex-1 flex-col gap-2">
+            <Skeleton className="h-4 w-1/3 rounded bg-[#272727]" />
+            <Skeleton className="h-3 w-1/2 rounded bg-[#272727]" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EmptyLibrary() {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-[#272727] bg-[#181818] py-24 text-center">
+      <Library className="mb-4 h-12 w-12 text-[#3f3f3f]" />
+      <p className="text-base font-semibold text-white">Sua Biblioteca está vazia</p>
+      <p className="mt-1 text-sm text-[#717171]">
+        Use o Garimpo para encontrar e salvar canais promissores.
+      </p>
+    </div>
+  )
+}
+
+function EmptySearch() {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-[#272727] bg-[#181818] py-24 text-center">
+      <Search className="mb-4 h-12 w-12 text-[#3f3f3f]" />
+      <p className="text-base font-semibold text-white">Nenhum canal encontrado</p>
+      <p className="mt-1 text-sm text-[#717171]">Tente buscar por outro termo.</p>
+    </div>
   )
 }
 

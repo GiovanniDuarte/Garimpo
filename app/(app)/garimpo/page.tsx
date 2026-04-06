@@ -8,7 +8,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Search, BookmarkPlus, Loader2, Crosshair } from 'lucide-react'
+import {
+  Search,
+  BookmarkPlus,
+  Loader2,
+  Crosshair,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  Users,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import type { VideoGarimpo } from '@/types'
 import {
@@ -38,25 +48,20 @@ export default function GarimpoPage() {
   const [maxInscritos, setMaxInscritos] = useState(1_000)
   const [dias, setDias] = useState(15)
   const [filtrosHydrated, setFiltrosHydrated] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [results, setResults] = useState<VideoGarimpo[]>([])
   const [continuation, setContinuation] = useState<string | null>(null)
   const [seedVideoId, setSeedVideoId] = useState<string | null>(null)
-  const [referenceChannelId, setReferenceChannelId] = useState<string | null>(
-    null
-  )
+  const [referenceChannelId, setReferenceChannelId] = useState<string | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
 
   useEffect(() => {
     const saved = lerFiltrosGarimpo()
     if (saved) {
-      setMinViews(
-        clamp(saved.minViews, MIN_VIEWS_SLIDER, MAX_MIN_VIEWS_SLIDER)
-      )
-      setMaxInscritos(
-        clamp(saved.maxInscritos, MIN_INSCRITOS_SLIDER, MAX_INSCRITOS_SLIDER)
-      )
+      setMinViews(clamp(saved.minViews, MIN_VIEWS_SLIDER, MAX_MIN_VIEWS_SLIDER))
+      setMaxInscritos(clamp(saved.maxInscritos, MIN_INSCRITOS_SLIDER, MAX_INSCRITOS_SLIDER))
       setDias(clamp(saved.dias, DIAS_MIN, DIAS_MAX))
     }
     setFiltrosHydrated(true)
@@ -144,12 +149,8 @@ export default function GarimpoPage() {
       setResults((prev) => sortByGem([...prev, ...items]))
       setContinuation(data.continuation ?? null)
       if (data.seedVideoId != null) setSeedVideoId(data.seedVideoId)
-      if (data.referenceChannelId != null) {
-        setReferenceChannelId(data.referenceChannelId)
-      }
-      if (items.length === 0) {
-        toast.message('Nenhum resultado novo com esses filtros.')
-      }
+      if (data.referenceChannelId != null) setReferenceChannelId(data.referenceChannelId)
+      if (items.length === 0) toast.message('Nenhum resultado novo com esses filtros.')
     } catch {
       toast.error('Falha de rede.')
     } finally {
@@ -197,95 +198,117 @@ export default function GarimpoPage() {
     <>
       <Header
         title="Garimpo"
-        description="Filtros no estilo da sua pesquisa. Por URL de vídeo, a lista mostra só sugestões de outros canais — nada do canal da referência."
+        description="Descubra vídeos com alto potencial de alcance e modelagem"
       />
       <PageWrapper>
-        <div className="space-y-8">
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-card p-6 shadow-2xl sm:p-8">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-50" />
-            <div className="relative z-10 mx-auto max-w-3xl space-y-6">
-              <div className="space-y-2 text-center">
-                <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                  Encontre sua próxima ideia
-                </h2>
-                <p className="text-sm text-muted-foreground sm:text-base">
-                  Palavras-chave ou URL de vídeo/canal — os filtros abaixo valem
-                  para toda consulta.
-                </p>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:rounded-xl sm:border sm:border-white/10 sm:bg-background/50 sm:p-2 sm:shadow-inner sm:backdrop-blur-md sm:focus-within:ring-1 sm:focus-within:ring-primary/50">
-                <div className="flex flex-1 items-center gap-2 rounded-xl border border-white/10 bg-background/50 p-2 shadow-inner backdrop-blur-md sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
-                  <Search className="ml-2 h-5 w-5 shrink-0 text-muted-foreground sm:ml-3" />
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    placeholder="Ex: faceless finance ou cole a URL do vídeo…"
-                    className="border-0 bg-transparent text-base focus-visible:ring-0 focus-visible:ring-offset-0 px-2"
-                  />
-                </div>
-                <Button
-                  size="lg"
-                  className="w-full shrink-0 rounded-lg shadow-lg sm:w-auto"
-                  onClick={handleSearch}
-                  disabled={loading || loadingMore}
-                >
-                  {loading ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    'Garimpar'
-                  )}
-                </Button>
+        <div className="space-y-6">
+
+          {/* ── Search bar ── */}
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              {/* Search input */}
+              <div className="flex flex-1 items-center gap-2 rounded-full border border-[#303030] bg-[#121212] px-4 py-2.5 shadow-inner transition-colors focus-within:border-[#717171]">
+                <Search className="h-4 w-4 shrink-0 text-[#aaaaaa]" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder="Palavras-chave ou URL do vídeo…"
+                  className="border-0 bg-transparent p-0 text-sm text-white placeholder:text-[#717171] focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
               </div>
 
-              <div className="border-t border-white/10 pt-6">
-                <p className="mb-4 text-sm font-semibold text-foreground">
+              {/* Search button */}
+              <Button
+                size="default"
+                className="rounded-full px-5 font-semibold shadow-sm"
+                onClick={handleSearch}
+                disabled={loading || loadingMore}
+                id="btn-garimpar"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Garimpar'
+                )}
+              </Button>
+
+              {/* Filters toggle */}
+              <button
+                onClick={() => setFiltersOpen((v) => !v)}
+                className="flex items-center gap-1.5 rounded-full border border-[#303030] bg-[#212121] px-4 py-2.5 text-sm font-medium text-[#aaaaaa] transition-colors hover:border-[#717171] hover:text-white"
+                aria-expanded={filtersOpen}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                <span className="hidden sm:inline">Filtros</span>
+                {filtersOpen ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </div>
+
+            {/* Collapsible filters panel */}
+            {filtersOpen && (
+              <div className="rounded-2xl border border-[#272727] bg-[#181818] p-5 shadow-lg">
+                <p className="mb-5 text-xs font-semibold uppercase tracking-wider text-[#717171]">
                   Filtros da consulta
                 </p>
-                <div className="grid gap-10 sm:grid-cols-3">
-                  <div className="min-h-[4.5rem] py-1">
-                    <p className="mb-3 text-xs text-muted-foreground">
-                      Mín. views no vídeo:{' '}
-                      {minViews.toLocaleString('pt-BR')}
-                    </p>
+                <div className="grid gap-6 sm:grid-cols-3">
+                  {/* Min views */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-1.5 text-xs font-medium text-[#aaaaaa]">
+                        <Eye className="h-3.5 w-3.5" />
+                        Mín. views
+                      </label>
+                      <span className="rounded-md bg-[#212121] px-2 py-0.5 text-xs font-bold tabular-nums text-white">
+                        {formatCompact(minViews)}
+                      </span>
+                    </div>
                     <Slider
                       value={[minViews]}
-                      onValueChange={(v) =>
-                        setMinViews(Array.isArray(v) ? v[0]! : v)
-                      }
+                      onValueChange={(v) => setMinViews(Array.isArray(v) ? v[0]! : v)}
                       min={MIN_VIEWS_SLIDER}
                       max={MAX_MIN_VIEWS_SLIDER}
                       step={STEP_MIN_VIEWS}
                     />
                   </div>
-                  <div className="min-h-[4.5rem] py-1">
-                    <p className="mb-3 text-xs text-muted-foreground">
-                      Máx. inscritos do canal:{' '}
-                      {formatCompact(maxInscritos)}
-                    </p>
+
+                  {/* Max inscritos */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-1.5 text-xs font-medium text-[#aaaaaa]">
+                        <Users className="h-3.5 w-3.5" />
+                        Máx. inscritos
+                      </label>
+                      <span className="rounded-md bg-[#212121] px-2 py-0.5 text-xs font-bold tabular-nums text-white">
+                        {formatCompact(maxInscritos)}
+                      </span>
+                    </div>
                     <Slider
                       value={[maxInscritos]}
-                      onValueChange={(v) =>
-                        setMaxInscritos(Array.isArray(v) ? v[0]! : v)
-                      }
+                      onValueChange={(v) => setMaxInscritos(Array.isArray(v) ? v[0]! : v)}
                       min={MIN_INSCRITOS_SLIDER}
                       max={MAX_INSCRITOS_SLIDER}
                       step={STEP_INSCRITOS}
                     />
                   </div>
-                  <div className="min-h-[4.5rem] py-1">
-                    <p className="mb-3 text-xs text-muted-foreground">
-                      Recência (busca por texto): últimos{' '}
-                      <span className="font-medium text-foreground">
-                        {dias}
-                      </span>{' '}
-                      dias
-                    </p>
+
+                  {/* Recência */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-[#aaaaaa]">
+                        Recência (dias)
+                      </label>
+                      <span className="rounded-md bg-[#212121] px-2 py-0.5 text-xs font-bold tabular-nums text-white">
+                        {dias}d
+                      </span>
+                    </div>
                     <Slider
                       value={[dias]}
-                      onValueChange={(v) =>
-                        setDias(Array.isArray(v) ? v[0]! : v)
-                      }
+                      onValueChange={(v) => setDias(Array.isArray(v) ? v[0]! : v)}
                       min={DIAS_MIN}
                       max={DIAS_MAX}
                       step={DIAS_STEP}
@@ -293,125 +316,183 @@ export default function GarimpoPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
-          <h3 className="text-lg font-bold">Resultados</h3>
-
+          {/* ── Results ── */}
           {loading ? (
-            <div className="grid gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="flex gap-4 rounded-2xl border border-white/5 bg-card/40 p-4"
-                >
-                  <Skeleton className="h-28 w-48 shrink-0 rounded-xl" />
-                  <div className="flex flex-1 flex-col justify-center space-y-3">
-                    <Skeleton className="h-5 w-3/4" />
-                    <Skeleton className="h-4 w-1/2" />
-                    <Skeleton className="h-4 w-1/3" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {results.map((video) => {
-                const busy = savingId === video.youtubeId
-                return (
-                  <div
-                    key={video.youtubeId}
-                    className="group flex flex-col gap-4 rounded-2xl border border-white/5 bg-card/60 p-4 shadow-sm backdrop-blur-md transition-all hover:border-primary/20 hover:bg-card hover:shadow-md sm:flex-row"
-                  >
-                    <div className="relative aspect-video w-full shrink-0 overflow-hidden rounded-xl sm:w-56">
-                      <img
-                        src={video.thumbnailUrl}
-                        alt=""
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col justify-center">
-                      <a
-                        href={video.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="line-clamp-2 text-lg font-semibold tracking-tight transition-colors hover:text-primary"
-                      >
-                        {video.titulo}
-                      </a>
-                      <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-                        {video.canal.nome}
-                      </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground/80">
-                        <span className="flex items-center gap-1.5 rounded-full bg-secondary/50 px-2.5 py-0.5 font-medium text-foreground">
-                          {formatCompact(video.views)} views
-                        </span>
-                        <span className="flex items-center gap-1.5 rounded-full bg-secondary/50 px-2.5 py-0.5 font-medium text-foreground">
-                          {formatCompact(video.canal.inscritos)} inscritos
-                        </span>
-                        {video.canal.totalViews != null &&
-                          video.canal.totalViews > 0 && (
-                            <span className="text-xs">
-                              {formatCompact(video.canal.totalViews)} views
-                              totais
-                            </span>
-                          )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col flex-wrap shrink-0 justify-center items-stretch gap-3 sm:items-end">
-                      <GemScoreBadge score={video.gemScore} size="lg" />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full border-primary/25 hover:bg-primary/10 sm:w-auto"
-                        onClick={() => setAsReference(video)}
-                      >
-                        <Crosshair className="h-4 w-4" />
-                        <span className="ml-2 font-medium">Referência</span>
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        disabled={busy}
-                        onClick={() => handleSave(video)}
-                        className="mt-auto w-full sm:w-auto"
-                      >
-                        {busy ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <BookmarkPlus className="h-4 w-4" />
-                        )}
-                        <span className="ml-2 font-medium">Salvar canal</span>
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
-              {continuation ? (
-                <div className="flex justify-center pt-4">
+            <VideoSkeletons />
+          ) : results.length > 0 ? (
+            <div className="space-y-4">
+              <p className="text-sm text-[#aaaaaa]">
+                <span className="font-semibold text-white">{results.length}</span> vídeos encontrados
+              </p>
+              <div className="space-y-3">
+                {results.map((video) => {
+                  const busy = savingId === video.youtubeId
+                  return (
+                    <VideoCard
+                      key={video.youtubeId}
+                      video={video}
+                      busy={busy}
+                      onSave={handleSave}
+                      onSetReference={setAsReference}
+                    />
+                  )
+                })}
+              </div>
+
+              {continuation && (
+                <div className="flex justify-center pt-2">
                   <Button
                     variant="secondary"
-                    size="lg"
-                    className="rounded-xl"
+                    className="rounded-full px-6 font-medium"
                     disabled={loadingMore}
                     onClick={handleLoadMore}
                   >
                     {loadingMore ? (
                       <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Carregando…
                       </>
                     ) : (
-                      'Carregar mais'
+                      'Carregar mais resultados'
                     )}
                   </Button>
                 </div>
-              ) : null}
+              )}
             </div>
+          ) : (
+            <EmptyState />
           )}
         </div>
       </PageWrapper>
     </>
+  )
+}
+
+/* ── Sub-components ────────────────────────────────── */
+
+function VideoCard({
+  video,
+  busy,
+  onSave,
+  onSetReference,
+}: {
+  video: VideoGarimpo
+  busy: boolean
+  onSave: (v: VideoGarimpo) => void
+  onSetReference: (v: VideoGarimpo) => void
+}) {
+  return (
+    <div className="group flex flex-col gap-3 rounded-xl border border-[#272727] bg-[#181818] p-3 transition-colors hover:border-[#3f3f3f] hover:bg-[#212121] sm:flex-row sm:gap-4 sm:p-4">
+      {/* Thumbnail */}
+      <a
+        href={video.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="relative aspect-video w-full shrink-0 overflow-hidden rounded-lg sm:w-52"
+      >
+        <img
+          src={video.thumbnailUrl}
+          alt=""
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+        {/* Duration badge placeholder – shown as overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+      </a>
+
+      {/* Info */}
+      <div className="flex min-w-0 flex-1 flex-col gap-2 py-0.5">
+        <a
+          href={video.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="line-clamp-2 text-sm font-semibold leading-snug text-white hover:text-primary sm:text-base"
+        >
+          {video.titulo}
+        </a>
+
+        <p className="text-xs font-medium text-[#aaaaaa]">{video.canal.nome}</p>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs text-[#717171]">
+          <span className="flex items-center gap-1">
+            <Eye className="h-3 w-3" />
+            {formatCompact(video.views)} views
+          </span>
+          <span>•</span>
+          <span className="flex items-center gap-1">
+            <Users className="h-3 w-3" />
+            {formatCompact(video.canal.inscritos)} inscritos
+          </span>
+          {video.canal.totalViews != null && video.canal.totalViews > 0 && (
+            <>
+              <span>•</span>
+              <span>{formatCompact(video.canal.totalViews)} views totais</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Actions + GemScore */}
+      <div className="flex shrink-0 flex-row flex-wrap items-center gap-2 sm:flex-col sm:items-end sm:justify-between">
+        <GemScoreBadge score={video.gemScore} size="lg" />
+        <div className="flex items-center gap-2 sm:flex-col sm:items-end">
+          <button
+            onClick={() => onSetReference(video)}
+            title="Usar como referência"
+            className="flex items-center gap-1.5 rounded-full border border-[#303030] bg-transparent px-3 py-1.5 text-xs font-medium text-[#aaaaaa] transition-colors hover:border-[#717171] hover:text-white"
+          >
+            <Crosshair className="h-3.5 w-3.5" />
+            Referência
+          </button>
+          <button
+            onClick={() => onSave(video)}
+            disabled={busy}
+            className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <BookmarkPlus className="h-3.5 w-3.5" />
+            )}
+            Salvar canal
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function VideoSkeletons() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex gap-4 rounded-xl border border-[#272727] bg-[#181818] p-4"
+        >
+          <Skeleton className="h-28 w-48 shrink-0 rounded-lg bg-[#272727]" />
+          <div className="flex flex-1 flex-col justify-center space-y-3">
+            <Skeleton className="h-4 w-3/4 rounded bg-[#272727]" />
+            <Skeleton className="h-3 w-1/3 rounded bg-[#272727]" />
+            <Skeleton className="h-3 w-1/2 rounded bg-[#272727]" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-[#272727] bg-[#181818] py-24 text-center">
+      <Search className="mb-4 h-12 w-12 text-[#3f3f3f]" />
+      <p className="text-base font-semibold text-white">Nenhum resultado ainda</p>
+      <p className="mt-1 text-sm text-[#717171]">
+        Digite um termo ou cole a URL de um vídeo e clique em Garimpar.
+      </p>
+    </div>
   )
 }
 

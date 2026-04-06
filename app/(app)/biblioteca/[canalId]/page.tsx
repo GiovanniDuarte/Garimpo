@@ -28,8 +28,10 @@ import {
   Edit3,
   Check,
   X,
+  ArrowLeft,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import Link from 'next/link'
 import type { CanalStatus, GemScoreDetalhado } from '@/types'
 import { calcularIdadeCanal } from '@/lib/scraper/channel-info'
 import { calcularPotencialModelagem } from '@/lib/scoring/potencial-modelagem'
@@ -77,6 +79,24 @@ export default function CanalDetailPage({
   const [editingNicho, setEditingNicho] = useState(false)
   const [nichoInput, setNichoInput] = useState('')
 
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmVideoId, setConfirmVideoId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (confirmDelete) {
+      const timer = setTimeout(() => setConfirmDelete(false), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [confirmDelete])
+
+  useEffect(() => {
+    if (confirmVideoId) {
+      const timer = setTimeout(() => setConfirmVideoId(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [confirmVideoId])
+
   useEffect(() => {
     fetchCanal()
   }, [canalId])
@@ -115,15 +135,42 @@ export default function CanalDetailPage({
     toast.success('Nicho atualizado')
   }
 
-  async function handleDeleteCanal() {
-    if (!confirm('Remover este canal da biblioteca?')) return
-    await fetch(`/api/canais/${canalId}`, { method: 'DELETE' })
-    toast.success('Canal removido')
-    router.push('/biblioteca')
+  async function handleDeleteCanal(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/canais/${canalId}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Canal removido')
+        router.push('/biblioteca')
+      } else {
+        toast.error('Erro ao remover canal')
+        setIsDeleting(false)
+        setConfirmDelete(false)
+      }
+    } catch {
+      toast.error('Erro ao remover canal')
+      setIsDeleting(false)
+      setConfirmDelete(false)
+    }
   }
 
-  async function handleDeleteVideo(videoId: string) {
-    if (!confirm('Remover este vídeo?')) return
+  async function handleDeleteVideo(videoId: string, e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (confirmVideoId !== videoId) {
+      setConfirmVideoId(videoId)
+      return
+    }
+
     try {
       const res = await fetch(`/api/videos/${videoId}`, { method: 'DELETE' })
       if (res.ok) {
@@ -134,15 +181,20 @@ export default function CanalDetailPage({
       }
     } catch {
       toast.error('Erro ao remover vídeo')
+    } finally {
+      setConfirmVideoId(null)
     }
   }
 
   if (loading) {
     return (
       <>
-        <Header title="Carregando..." />
+        <Header title="Carregando…" />
         <PageWrapper>
-          <Skeleton className="h-32 w-full" />
+          <div className="space-y-4">
+            <Skeleton className="h-44 w-full rounded-2xl bg-[#272727]" />
+            <Skeleton className="h-24 w-full rounded-xl bg-[#272727]" />
+          </div>
         </PageWrapper>
       </>
     )
@@ -186,12 +238,12 @@ export default function CanalDetailPage({
       <Header
         title={canal.nome}
         action={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <Select
               value={canal.status}
               onValueChange={(v) => v && handleStatusChange(v)}
             >
-              <SelectTrigger className="w-44 bg-card">
+              <SelectTrigger className="w-40 rounded-full border-[#303030] bg-[#212121] text-sm text-[#aaaaaa]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -203,171 +255,205 @@ export default function CanalDetailPage({
                 <SelectItem value="descartado">Descartado</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="destructive" size="sm" onClick={handleDeleteCanal}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <button
+              type="button"
+              onClick={handleDeleteCanal}
+              disabled={isDeleting}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                confirmDelete 
+                  ? 'bg-red-600 text-white hover:bg-red-700' 
+                  : 'text-[#717171] hover:bg-red-500/15 hover:text-red-400'
+              }`}
+              title="Remover canal"
+            >
+              {isDeleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : confirmDelete ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  Confirmar Exclusão?
+                </>
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </button>
           </div>
         }
       />
+
       <PageWrapper>
-        <div className="space-y-8">
-          <section className="flex items-start gap-6">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary">
-              {canal.thumbnailUrl ? (
-                <img
-                  src={`/api/canais/${canalId}/avatar`}
-                  alt={canal.nome}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="text-2xl font-bold text-muted-foreground">
-                  {canal.nome.charAt(0)}
-                </span>
-              )}
-            </div>
-            <div className="flex-1">
-              <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-2xl font-semibold">{canal.nome}</h2>
-                <ChannelStatusBadge status={canal.status as CanalStatus} />
-                {gemScore && <GemScoreBadge score={gemScore} size="md" />}
+        <div className="space-y-6">
+
+          {/* Back link */}
+          <Link
+            href="/biblioteca"
+            className="inline-flex items-center gap-1.5 text-xs text-[#aaaaaa] transition-colors hover:text-white"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Biblioteca
+          </Link>
+
+          {/* ── Channel hero ── */}
+          <section className="overflow-hidden rounded-2xl border border-[#272727] bg-[#181818]">
+            {/* Banner placeholder */}
+            <div className="h-28 bg-gradient-to-br from-[#272727] to-[#1a1a1a]" />
+
+            <div className="flex flex-col gap-4 px-6 pb-6 sm:flex-row sm:items-end">
+              {/* Avatar – overlaps banner */}
+              <div className="-mt-10 flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-[#181818] bg-[#272727]">
+                {canal.thumbnailUrl ? (
+                  <img
+                    src={`/api/canais/${canalId}/avatar`}
+                    alt={canal.nome}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-3xl font-bold text-[#aaaaaa]">
+                    {canal.nome.charAt(0)}
+                  </span>
+                )}
               </div>
-              <a
-                href={canal.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
-              >
-                {canal.url.replace('https://www.youtube.com/', '')}
-                <ExternalLink className="h-3 w-3" />
-              </a>
-              {canal.descricao && (
-                <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                  {canal.descricao}
-                </p>
-              )}
+
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-xl font-bold text-white">{canal.nome}</h2>
+                  <ChannelStatusBadge status={canal.status as CanalStatus} />
+                  {gemScore && <GemScoreBadge score={gemScore} size="md" />}
+                </div>
+                <a
+                  href={canal.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-[#aaaaaa] hover:text-primary"
+                >
+                  {canal.url.replace('https://www.youtube.com/', 'youtube.com/')}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+                {canal.descricao && (
+                  <p className="mt-1 line-clamp-2 text-xs text-[#717171]">
+                    {canal.descricao}
+                  </p>
+                )}
+              </div>
             </div>
           </section>
 
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <MetricCard
-              icon={Users}
-              label="Inscritos"
-              value={
-                canal.inscritos ? formatNum(canal.inscritos) : '—'
-              }
-            />
-            <MetricCard
-              icon={Eye}
-              label="Views totais"
-              value={
-                canal.totalViews != null && canal.totalViews > 0
-                  ? formatNum(canal.totalViews)
-                  : '—'
-              }
-            />
-            <MetricCard
-              icon={Video}
-              label="Vídeos"
-              value={
-                canal.videosPublicados
-                  ? formatNum(canal.videosPublicados)
-                  : '—'
-              }
-            />
-            <MetricCard
-              icon={Calendar}
-              label="Idade"
-              value={idadeCanal || '—'}
-            />
-            <MetricCard
-              icon={Clock}
-              label="Frequência"
-              value={canal.frequenciaPostagem || '—'}
-            />
+          {/* ── Stats grid ── */}
+          <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            <MetricCard icon={Users} label="Inscritos" value={canal.inscritos ? formatNum(canal.inscritos) : '—'} />
+            <MetricCard icon={Eye} label="Views totais" value={canal.totalViews != null && canal.totalViews > 0 ? formatNum(canal.totalViews) : '—'} />
+            <MetricCard icon={Video} label="Vídeos" value={canal.videosPublicados ? formatNum(canal.videosPublicados) : '—'} />
+            <MetricCard icon={Calendar} label="Idade" value={idadeCanal || '—'} />
+            <MetricCard icon={Clock} label="Frequência" value={canal.frequenciaPostagem || '—'} />
           </section>
 
-          <section className="rounded-lg border border-border bg-card p-6">
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Nicho
-            </h3>
-            <div className="flex items-center gap-3">
+          {/* ── Nicho ── */}
+          <section className="rounded-xl border border-[#272727] bg-[#181818] p-4">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[#717171]">Nicho</p>
+            <div className="flex items-center gap-2">
               {editingNicho ? (
                 <>
                   <Input
                     value={nichoInput}
                     onChange={(e) => setNichoInput(e.target.value)}
-                    className="max-w-md bg-background"
+                    className="max-w-sm border-[#303030] bg-[#212121] text-sm text-white focus-visible:ring-primary"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveNicho()}
                   />
-                  <Button size="sm" variant="ghost" onClick={handleSaveNicho}>
+                  <button
+                    onClick={handleSaveNicho}
+                    className="rounded-full p-1.5 text-[#aaaaaa] transition-colors hover:bg-[#272727] hover:text-white"
+                  >
                     <Check className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
+                  </button>
+                  <button
                     onClick={() => {
                       setEditingNicho(false)
                       setNichoInput(canal.nichoInferido || '')
                     }}
+                    className="rounded-full p-1.5 text-[#aaaaaa] transition-colors hover:bg-[#272727] hover:text-white"
                   >
                     <X className="h-4 w-4" />
-                  </Button>
+                  </button>
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-medium">
+                  <span className="text-sm text-white">
                     {canal.nichoInferido || 'Não identificado'}
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="ghost"
+                  </span>
+                  <button
                     onClick={() => setEditingNicho(true)}
+                    className="rounded-full p-1.5 text-[#717171] transition-colors hover:bg-[#272727] hover:text-white"
                   >
                     <Edit3 className="h-3.5 w-3.5" />
-                  </Button>
+                  </button>
                 </>
               )}
             </div>
           </section>
 
+          {/* ── Gem Score Panel ── */}
           {gemScore && (
-            <GemScorePanel
-              score={gemScore}
-              totalViewsCanal={canal.totalViews}
-            />
+            <GemScorePanel score={gemScore} totalViewsCanal={canal.totalViews} />
           )}
 
+          {/* ── Potencial de Modelagem ── */}
           <PotencialModelagemPanel potencial={potencialModelagem} />
 
+          {/* ── Top Vídeos ── */}
           {topVideos.length > 0 && (
-            <section className="rounded-lg border border-border bg-card p-6">
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Top vídeos
-              </h3>
-              <div className="space-y-1">
+            <section className="overflow-hidden rounded-xl border border-[#272727] bg-[#181818]">
+              <div className="border-b border-[#272727] px-5 py-4">
+                <h3 className="text-sm font-semibold text-white">
+                  Top Vídeos
+                  <span className="ml-2 text-xs font-normal text-[#717171]">
+                    por views
+                  </span>
+                </h3>
+              </div>
+              <div className="divide-y divide-[#272727]">
                 {topVideos.map((v, i) => (
                   <div
                     key={v.id}
-                    className="group flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-secondary"
+                    className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[#212121]"
                   >
-                    <span className="w-6 text-center text-xs text-muted-foreground">
+                    <span className="w-5 shrink-0 text-center text-xs text-[#717171]">
                       {i + 1}
                     </span>
+                    {v.thumbnailUrl && (
+                      <img
+                        src={v.thumbnailUrl}
+                        alt=""
+                        className="h-10 w-[72px] shrink-0 rounded-md object-cover"
+                      />
+                    )}
                     <a
                       href={v.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="min-w-0 flex-1 truncate hover:text-primary"
+                      className="min-w-0 flex-1 truncate text-sm text-white hover:text-primary"
                     >
                       {v.titulo}
                     </a>
-                    <span className="shrink-0 text-xs text-muted-foreground">
+                    <span className="shrink-0 text-xs tabular-nums text-[#717171]">
                       {v.views != null ? formatNum(v.views) : '—'}
                     </span>
                     <button
-                      onClick={() => handleDeleteVideo(v.id)}
-                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+                      type="button"
+                      onClick={(e) => handleDeleteVideo(v.id, e)}
+                      className={`shrink-0 rounded-full px-2 py-1 text-xs transition-all flex items-center gap-1 ${
+                        confirmVideoId === v.id
+                          ? 'bg-red-600 text-white opacity-100'
+                          : 'text-[#717171] opacity-0 group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-400'
+                      }`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      {confirmVideoId === v.id ? (
+                        <>
+                          <Check className="h-3 w-3" />
+                          Confirmar?
+                        </>
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
                     </button>
                   </div>
                 ))}
@@ -390,12 +476,12 @@ function MetricCard({
   value: string
 }) {
   return (
-    <div className="rounded-lg border border-border bg-muted/20 p-3">
-      <Icon className="mb-1 h-4 w-4 text-muted-foreground" />
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-0.5 font-semibold tabular-nums">{value}</p>
+    <div className="rounded-xl border border-[#272727] bg-[#181818] p-4">
+      <div className="mb-2 flex items-center gap-1.5 text-[#717171]">
+        <Icon className="h-3.5 w-3.5" />
+        <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
+      </div>
+      <p className="text-lg font-bold tabular-nums text-white">{value}</p>
     </div>
   )
 }
