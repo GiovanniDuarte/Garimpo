@@ -1,126 +1,83 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Pickaxe, Library, ChevronLeft, ChevronRight } from 'lucide-react'
-import { RedDiamondIcon } from '@/components/brand/RedDiamondIcon'
+import { Pickaxe, Library } from 'lucide-react'
+import { GarimpoGemMark } from '@/components/brand/GarimpoGemMark'
 
 const links = [
   {
     href: '/garimpo',
-    label: 'Garimpo',
+    label: 'Garimpar',
     icon: Pickaxe,
-    description: 'Descobrir vídeos',
   },
   {
     href: '/biblioteca',
     label: 'Biblioteca',
     icon: Library,
-    description: 'Canais salvos',
   },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <aside
-      className={cn(
-        'relative flex shrink-0 flex-col border-r border-[#272727] bg-[#0f0f0f] text-foreground',
-        'transition-all duration-300 ease-in-out',
-        collapsed ? 'w-[72px]' : 'w-60'
-      )}
-    >
-      {/* Logo area */}
-      <div
-        className={cn(
-          'flex h-14 items-center gap-3 px-4',
-          collapsed && 'justify-center px-0'
-        )}
-      >
+    <aside className="sticky top-0 flex h-screen w-[220px] shrink-0 flex-col border-r border-white/[0.07] bg-gp-bg2">
+      <div className="flex items-center border-b border-white/[0.07] px-5 py-[20px] pb-[18px]">
         <Link
           href="/garimpo"
-          className="flex items-center gap-2.5 min-w-0"
-          tabIndex={0}
+          className="flex min-w-0 items-center gap-1.5"
+          aria-label="Garimpo — início"
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md">
-            <RedDiamondIcon size={26} />
-          </div>
-          {!collapsed && (
-            <span className="truncate text-base font-bold tracking-tight text-white">
-              Garimpo
-            </span>
-          )}
+          <GarimpoGemMark size={48} />
+          <span className="font-heading text-[17px] font-extrabold tracking-[0.04em] text-gp-text antialiased">
+            Garimpo
+          </span>
         </Link>
       </div>
 
-      {/* Divider */}
-      <div className="mx-3 h-px bg-[#272727]" />
-
-      {/* Navigation */}
-      <nav className="flex flex-col gap-0.5 px-2 py-3">
-        {links.map(({ href, label, icon: Icon, description }) => {
+      <nav className="flex flex-1 flex-col px-3 py-4">
+        {links.map(({ href, label, icon: Icon }) => {
           const active =
             pathname === href || pathname.startsWith(href + '/')
           return (
             <Link
               key={href}
               href={href}
-              title={collapsed ? label : undefined}
               className={cn(
-                'group relative flex items-center gap-4 rounded-xl px-3 py-2.5 text-sm font-medium',
-                'transition-colors duration-150',
+                'mb-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-normal transition-colors',
                 active
-                  ? 'bg-[#272727] text-white'
-                  : 'text-[#aaaaaa] hover:bg-[#272727] hover:text-white',
-                collapsed && 'justify-center px-0 py-3'
+                  ? 'bg-gp-gold-dim font-medium text-gp-gold'
+                  : 'text-gp-text2 hover:bg-gp-bg3 hover:text-gp-text'
               )}
             >
               <Icon
                 className={cn(
-                  'h-5 w-5 shrink-0 transition-colors',
-                  active ? 'text-white' : 'text-[#aaaaaa] group-hover:text-white'
+                  'size-[22px] shrink-0 stroke-[1.75]',
+                  active ? 'text-gp-gold' : 'text-gp-text2'
                 )}
+                aria-hidden
               />
-              {!collapsed && (
-                <div className="flex min-w-0 flex-col leading-none">
-                  <span className="truncate">{label}</span>
-                  <span className="mt-0.5 truncate text-[11px] text-[#717171] group-hover:text-[#aaaaaa]">
-                    {description}
-                  </span>
-                </div>
-              )}
-              {/* Active indicator bar */}
-              {active && (
-                <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
-              )}
+              {label}
             </Link>
           )
         })}
       </nav>
 
-      {/* Collapse toggle button */}
-      <button
-        onClick={() => setCollapsed((c) => !c)}
-        className={cn(
-          'mt-auto flex items-center gap-2 px-4 py-4 text-xs text-[#717171]',
-          'hover:text-white transition-colors',
-          collapsed && 'justify-center px-0'
-        )}
-        aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-      >
-        {collapsed ? (
-          <ChevronRight className="h-4 w-4" />
-        ) : (
-          <>
-            <ChevronLeft className="h-4 w-4" />
-            <span>Recolher</span>
-          </>
-        )}
-      </button>
+      <div className="border-t border-white/[0.07] px-3 py-3.5">
+        <div className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-gp-bg3">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-gp-bg4 font-heading text-[11px] font-semibold text-gp-text2">
+            G
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium leading-tight text-gp-text">
+              Garimpo
+            </p>
+            <p className="text-[11px] text-gp-text3">local</p>
+          </div>
+        </div>
+      </div>
     </aside>
   )
 }

@@ -21,6 +21,7 @@ import {
   Users,
   Globe2,
   Link2,
+  Clapperboard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { viewsTotaisBarInnerStyle } from '@/lib/views-totais-bar'
@@ -30,18 +31,20 @@ import {
   lerFiltrosGarimpo,
   salvarFiltrosGarimpo,
 } from '@/lib/garimpo-filtros-storage'
+import {
+  RECENCIA_PUBLICACAO_OPCOES,
+  type RecenciaDias,
+} from '@/lib/garimpo-recencia-label'
 
-const MIN_VIEWS_SLIDER = 10_000
-const MAX_MIN_VIEWS_SLIDER = 20_000_000
+const MIN_VIEWS_SLIDER = 5_000
+const MAX_MIN_VIEWS_SLIDER = 10_000_000
 const STEP_MIN_VIEWS = 5_000
 
 const MIN_INSCRITOS_SLIDER = 1_000
 const MAX_INSCRITOS_SLIDER = 100_000
 const STEP_INSCRITOS = 1_000
 
-const DIAS_MIN = 1
-const DIAS_MAX = 90
-const DIAS_STEP = 1
+const QUERY_MAX_LEN = 500
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
@@ -51,7 +54,7 @@ export default function GarimpoPage() {
   const [query, setQuery] = useState('')
   const [minViews, setMinViews] = useState(15_000)
   const [maxInscritos, setMaxInscritos] = useState(1_000)
-  const [dias, setDias] = useState(15)
+  const [dias, setDias] = useState<RecenciaDias>(30)
   const [filtrosHydrated, setFiltrosHydrated] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -69,15 +72,23 @@ export default function GarimpoPage() {
     if (saved) {
       setMinViews(clamp(saved.minViews, MIN_VIEWS_SLIDER, MAX_MIN_VIEWS_SLIDER))
       setMaxInscritos(clamp(saved.maxInscritos, MIN_INSCRITOS_SLIDER, MAX_INSCRITOS_SLIDER))
-      setDias(clamp(saved.dias, DIAS_MIN, DIAS_MAX))
+      setDias(saved.dias as RecenciaDias)
+      if (typeof saved.filtersOpen === 'boolean') setFiltersOpen(saved.filtersOpen)
+      if (saved.query != null) setQuery(saved.query.slice(0, QUERY_MAX_LEN))
     }
     setFiltrosHydrated(true)
   }, [])
 
   useEffect(() => {
     if (!filtrosHydrated) return
-    salvarFiltrosGarimpo({ minViews, maxInscritos, dias })
-  }, [filtrosHydrated, minViews, maxInscritos, dias])
+    salvarFiltrosGarimpo({
+      minViews,
+      maxInscritos,
+      dias,
+      filtersOpen,
+      query: query.slice(0, QUERY_MAX_LEN),
+    })
+  }, [filtrosHydrated, minViews, maxInscritos, dias, filtersOpen, query])
 
   useEffect(() => {
     if (results.length === 0) return
@@ -298,7 +309,7 @@ export default function GarimpoPage() {
                 <p className="mb-5 text-xs font-semibold uppercase tracking-wider text-[#717171]">
                   Filtros da consulta
                 </p>
-                <div className="grid gap-6 sm:grid-cols-3">
+                <div className="grid gap-6 sm:grid-cols-2">
                   {/* Min views */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -339,23 +350,39 @@ export default function GarimpoPage() {
                     />
                   </div>
 
-                  {/* Recência */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                  {/* Recência: dias / meses (mapeadas às faixas do YouTube) */}
+                  <div className="space-y-3 sm:col-span-2">
+                    <div>
                       <label className="text-xs font-medium text-[#aaaaaa]">
-                        Recência (dias)
+                        Publicação do vídeo
                       </label>
-                      <span className="rounded-md bg-[#212121] px-2 py-0.5 text-xs font-bold tabular-nums text-white">
-                        {dias}d
-                      </span>
+                      <p className="mt-1 text-[10px] leading-snug text-[#5c5c5c]">
+                        Só entram vídeos publicados dentro deste período (o YouTube
+                        usa faixas fixas: semana, mês ou ano — equivalentes abaixo).
+                      </p>
                     </div>
-                    <Slider
-                      value={[dias]}
-                      onValueChange={(v) => setDias(Array.isArray(v) ? v[0]! : v)}
-                      min={DIAS_MIN}
-                      max={DIAS_MAX}
-                      step={DIAS_STEP}
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      {RECENCIA_PUBLICACAO_OPCOES.map((opt) => (
+                        <button
+                          key={opt.dias}
+                          type="button"
+                          onClick={() => setDias(opt.dias)}
+                          className={cn(
+                            'rounded-lg border px-3 py-2.5 text-left transition-colors',
+                            dias === opt.dias
+                              ? 'border-[rgba(232,169,58,0.45)] bg-gp-gold/15 text-gp-gold'
+                              : 'border-white/[0.1] bg-gp-bg3/80 text-gp-text2 hover:border-white/[0.18] hover:text-gp-text'
+                          )}
+                        >
+                          <span className="block text-xs font-semibold text-gp-text">
+                            {opt.titulo}
+                          </span>
+                          <span className="mt-0.5 block text-[10px] leading-tight opacity-85">
+                            {opt.subtitulo}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -527,6 +554,13 @@ function VideoCard({
                 {formatCompact(video.canal.totalViews)} views totais
               </span>
             )}
+            {video.canal.videosPublicados != null &&
+              video.canal.videosPublicados > 0 && (
+                <span className="inline-flex items-center gap-0.5 tabular-nums">
+                  <Clapperboard className="h-3 w-3 shrink-0 opacity-80" />
+                  {formatCompact(video.canal.videosPublicados)} vídeos no canal
+                </span>
+              )}
           </div>
 
           <div className="mt-0.5 h-1 w-full max-w-md overflow-hidden rounded-full bg-[#272727]">
@@ -542,7 +576,7 @@ function VideoCard({
         <div className="flex w-full shrink-0 flex-col justify-center gap-1.5 border-t border-[#272727]/80 pt-2 sm:w-[10.25rem] sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
           <div
             className="w-full min-w-0"
-            title="Gem Score (a barra ao lado = views totais do canal, cor conforme o volume)"
+            title="Gem Score: cor da pílula = classificação (tier). Barra cinza = views totais do canal vs. o maior desta listagem."
           >
             <GemScoreBadge
               score={video.gemScore}

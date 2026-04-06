@@ -58,13 +58,13 @@ function Flag({ ok, label }: { ok: boolean | null; label: string }) {
 
 const mpmTierBadgeClass: Record<MpmTier, string> = {
   pepita:
-    'border-emerald-500/30 bg-gem-pepita-bg text-gem-pepita-text ring-1 ring-white/10',
+    'border-[#4abe8a]/35 bg-gem-pepita-bg text-gem-pepita-text ring-1 ring-white/10',
   promissor:
-    'border-amber-500/30 bg-gem-promissor-bg text-gem-promissor-text ring-1 ring-white/10',
+    'border-[#5a9be0]/35 bg-gem-promissor-bg text-gem-promissor-text ring-1 ring-white/10',
   mediano:
-    'border-red-400/25 bg-gem-mediano-bg text-gem-mediano-text ring-1 ring-white/10',
+    'border-[#e8a93a]/35 bg-gem-mediano-bg text-gem-mediano-text ring-1 ring-white/10',
   fraco:
-    'border-red-500/30 bg-gem-fraco-bg text-gem-fraco-text ring-1 ring-white/10',
+    'border-white/[0.12] bg-gem-fraco-bg text-gem-fraco-text ring-1 ring-white/10',
 }
 
 export function PotencialModelagemPanel({

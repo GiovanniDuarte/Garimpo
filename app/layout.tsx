@@ -1,26 +1,26 @@
 import type { Metadata } from 'next'
-import { Roboto, Roboto_Mono, Outfit } from 'next/font/google'
+import { Epilogue, Syne, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
 
-const roboto = Roboto({
+const epilogue = Epilogue({
   variable: '--font-sans',
   subsets: ['latin'],
-  weight: ['400', '500', '700'],
+  weight: ['300', '400', '500'],
   display: 'swap',
 })
 
-const outfit = Outfit({
+const syne = Syne({
   variable: '--font-heading',
   subsets: ['latin'],
-  weight: ['500', '600', '700', '800', '900'],
+  weight: ['400', '500', '600', '700', '800'],
   display: 'swap',
 })
 
-const robotoMono = Roboto_Mono({
+const jetbrainsMono = JetBrains_Mono({
   variable: '--font-mono',
   subsets: ['latin'],
-  weight: ['400', '500', '700'],
+  weight: ['400', '500'],
   display: 'swap',
 })
 
@@ -37,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className="dark" suppressHydrationWarning>
       <body
-        className={`${roboto.variable} ${outfit.variable} ${robotoMono.variable} min-h-full antialiased`}
+        className={`${epilogue.variable} ${syne.variable} ${jetbrainsMono.variable} min-h-full bg-gp-bg font-sans antialiased`}
       >
         <Providers>{children}</Providers>
       </body>

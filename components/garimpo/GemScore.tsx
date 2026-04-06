@@ -1,10 +1,22 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import type { GemScoreDetalhado } from '@/types'
-import { Gauge, Rocket, Layers, Scale, Globe2, Sparkles } from 'lucide-react'
+import type { GemScoreDetalhado, GemScoreSinaisV3 } from '@/types'
+import {
+  Gauge,
+  Rocket,
+  Layers,
+  Scale,
+  Globe2,
+  Sparkles,
+  PlusCircle,
+  TrendingUp,
+  BarChart3,
+  Clock,
+  AlertTriangle,
+} from 'lucide-react'
 
-const MAX = {
+const MAX_V2 = {
   viewsPorInscrito: 32,
   velocidade: 28,
   consistencia: 18,
@@ -12,9 +24,9 @@ const MAX = {
   alcanceCanal: 10,
 } as const
 
-function normalizeBreakdown(
+function normalizeBreakdownV2(
   b: GemScoreDetalhado['breakdown'] | undefined
-): GemScoreDetalhado['breakdown'] {
+): NonNullable<GemScoreDetalhado['breakdown']> {
   return {
     viewsPorInscrito: b?.viewsPorInscrito ?? 0,
     velocidade: b?.velocidade ?? 0,
@@ -22,6 +34,13 @@ function normalizeBreakdown(
     tamanhoCanal: b?.tamanhoCanal ?? 0,
     alcanceCanal: b?.alcanceCanal ?? 0,
   }
+}
+
+function isGemV3(score: GemScoreDetalhado): score is GemScoreDetalhado & {
+  versao: 3
+  sinais: GemScoreSinaisV3
+} {
+  return score.versao === 3 && score.sinais != null
 }
 
 const tierMeta: Record<
@@ -42,8 +61,8 @@ const tierMeta: Record<
     label: 'Pepita',
     shortLabel: 'Pep',
     hint: 'Desempenho excepcional em relação ao tamanho do canal e ao alcance.',
-    ring: 'stroke-emerald-400',
-    bar: 'bg-emerald-500',
+    ring: 'stroke-[#4abe8a]',
+    bar: 'bg-[#4abe8a]',
   },
   promissor: {
     bg: 'bg-gem-promissor-bg',
@@ -51,8 +70,8 @@ const tierMeta: Record<
     label: 'Promissor',
     shortLabel: 'Pro',
     hint: 'Boa tração, velocidade ou consistência — vale acompanhar de perto.',
-    ring: 'stroke-amber-400',
-    bar: 'bg-amber-500',
+    ring: 'stroke-[#5a9be0]',
+    bar: 'bg-[#5a9be0]',
   },
   mediano: {
     bg: 'bg-gem-mediano-bg',
@@ -60,8 +79,8 @@ const tierMeta: Record<
     label: 'Mediano',
     shortLabel: 'Med',
     hint: 'Dentro do esperado para o perfil.',
-    ring: 'stroke-red-400/70',
-    bar: 'bg-sky-500',
+    ring: 'stroke-[#e8a93a]',
+    bar: 'bg-[#e8a93a]',
   },
   fraco: {
     bg: 'bg-gem-fraco-bg',
@@ -69,8 +88,8 @@ const tierMeta: Record<
     label: 'Fraco',
     shortLabel: 'Fr',
     hint: 'Pouco destaque frente ao tamanho do canal ou ao histórico de views.',
-    ring: 'stroke-red-400/80',
-    bar: 'bg-zinc-500',
+    ring: 'stroke-[#6b6a66]',
+    bar: 'bg-[#5e5d5a]',
   },
 }
 
@@ -134,7 +153,299 @@ export function GemScoreBadge({
   )
 }
 
+export type GemScoreContextoCanal = {
+  /** Total público de vídeos do canal (YouTube); omitir pílula se null. */
+  videosNoCanal: number | null
+  idadeMeses: number
+  inscritos: number
+  totalViews: number
+}
+
 export function GemScorePanel({
+  score,
+  totalViewsCanal,
+  contextoCanal,
+}: {
+  score: GemScoreDetalhado
+  totalViewsCanal?: number | null
+  /** Pílulas do cabeçalho (v3): vídeos no canal, idade, views, inscritos. */
+  contextoCanal?: GemScoreContextoCanal | null
+}) {
+  if (isGemV3(score)) {
+    return (
+      <GemScorePanelV3
+        score={score}
+        contextoCanal={contextoCanal}
+      />
+    )
+  }
+
+  return (
+    <GemScorePanelV2 score={score} totalViewsCanal={totalViewsCanal} />
+  )
+}
+
+function GemScorePanelV3({
+  score,
+  contextoCanal,
+}: {
+  score: GemScoreDetalhado & { versao: 3; sinais: GemScoreSinaisV3 }
+  contextoCanal?: GemScoreContextoCanal | null
+}) {
+  const tier = tierMeta[score.classificacao] || tierMeta.fraco
+  const { sinais } = score
+
+  const sinalRows: {
+    key: string
+    titulo: string
+    sinal: GemScoreSinaisV3[keyof GemScoreSinaisV3]
+    icon: React.ComponentType<{ className?: string }>
+    iconWrap: string
+    barClass: string
+  }[] = [
+    {
+      key: 'autonomia',
+      titulo: 'Índice de Autonomia',
+      sinal: sinais.autonomia,
+      icon: PlusCircle,
+      iconWrap: 'bg-sky-500/20 text-sky-400',
+      barClass: 'bg-sky-500',
+    },
+    {
+      key: 'aceleracao',
+      titulo: 'Coeficiente de Aceleração',
+      sinal: sinais.aceleracao,
+      icon: TrendingUp,
+      iconWrap: 'bg-emerald-500/20 text-emerald-400',
+      barClass: 'bg-emerald-500',
+    },
+    {
+      key: 'densidade',
+      titulo: 'Densidade de Hits',
+      sinal: sinais.densidadeHits,
+      icon: BarChart3,
+      iconWrap: 'bg-gp-gold/10 text-gp-gold',
+      barClass: 'bg-gp-gold',
+    },
+    {
+      key: 'pressao',
+      titulo: 'Pressão por Unidade',
+      sinal: sinais.pressaoUnidade,
+      icon: Clock,
+      iconWrap: 'bg-gp-red/10 text-gp-red',
+      barClass: 'bg-gp-red',
+    },
+  ]
+
+  const rodapeDefault = [
+    `${sinais.autonomia.ratioMultiplo}×`,
+    `${sinais.aceleracao.multiplo}×`,
+    `${sinais.densidadeHits.pct}%`,
+    formatCompact(sinais.pressaoUnidade.viewsPorDiaPorVideo),
+  ]
+  const rodapeRaw = score.resumoRodape ?? rodapeDefault
+  const rodape = rodapeRaw.slice(0, 4)
+
+  const rodapeHints = [
+    'autonomia da base',
+    'aceleração',
+    'hits acima 100k',
+    'views/dia/vídeo',
+  ]
+
+  return (
+    <div className="gp-card overflow-hidden shadow-sm">
+      <div className="grid gap-6 p-6 sm:grid-cols-[auto_1fr] sm:items-start">
+        <ScoreRing value={score.total} strokeClass={tier.ring} centerClassName={tier.text} />
+        <div className="min-w-0 space-y-3 pt-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-heading text-base font-bold tracking-wide text-gp-text">
+              Gem Score
+            </h3>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded border border-white/[0.12] px-2 py-0.5 font-heading text-[10px] font-semibold uppercase tracking-[0.06em]',
+                tier.bg,
+                tier.text
+              )}
+            >
+              {tier.label}
+            </span>
+          </div>
+          <p className="max-w-[480px] text-[13px] leading-relaxed text-gp-text2">
+            Quatro sinais que eliminam ruído e revelam canais com tração real,
+            independente de inscritos ou histórico longo.
+          </p>
+          {contextoCanal && (
+            <div className="flex flex-wrap gap-1.5">
+              {contextoCanal.videosNoCanal != null &&
+                contextoCanal.videosNoCanal > 0 && (
+                  <span className="gp-mono-nums rounded-full border border-white/[0.12] bg-gp-bg4 px-2.5 py-1 text-[11px] text-gp-text2">
+                    {contextoCanal.videosNoCanal} vídeos no canal
+                  </span>
+                )}
+              <span className="gp-mono-nums rounded-full border border-white/[0.12] bg-gp-bg4 px-2.5 py-1 text-[11px] text-gp-text2">
+                {contextoCanal.idadeMeses}{' '}
+                {contextoCanal.idadeMeses === 1 ? 'mês' : 'meses'}
+              </span>
+              <span className="gp-mono-nums rounded-full border border-white/[0.12] bg-gp-bg4 px-2.5 py-1 text-[11px] text-gp-text2">
+                {formatCompact(contextoCanal.totalViews)} views totais
+              </span>
+              <span className="gp-mono-nums rounded-full border border-white/[0.12] bg-gp-bg4 px-2.5 py-1 text-[11px] text-gp-text2">
+                {formatCompact(contextoCanal.inscritos)} inscritos
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-0.5 border-t border-white/[0.07] bg-gp-bg2/80 px-4 py-4 sm:px-6">
+        <p className="mb-3 font-heading text-[10px] font-semibold uppercase tracking-[0.08em] text-gp-text3">
+          4 sinais · máx. 100 pts
+        </p>
+        <div className="flex flex-col gap-0.5">
+          {sinalRows.map((row) => (
+            <SinalRowV3
+              key={row.key}
+              titulo={row.titulo}
+              sinal={row.sinal}
+              icon={row.icon}
+              iconWrap={row.iconWrap}
+              barClass={row.barClass}
+            />
+          ))}
+        </div>
+      </div>
+
+      {score.insight && (
+        <div className="flex gap-3 border-t border-gp-gold/25 bg-gp-gold/10 px-5 py-3 text-sm text-gp-text">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-gp-gold" />
+          <p className="leading-snug text-gp-text2">{score.insight}</p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2 border-t border-white/[0.07] bg-gp-bg3 px-3 py-4 sm:grid-cols-4 sm:px-5">
+        {rodape.map((v, i) => (
+          <div
+            key={i}
+            className="rounded-lg bg-gp-bg3 px-3 py-3 text-center sm:bg-gp-bg2"
+          >
+            <p className="gp-mono-nums truncate text-lg font-medium text-gp-gold sm:text-xl">
+              {v}
+            </p>
+            <p className="mt-1 truncate text-[11px] leading-snug text-gp-text3">
+              {rodapeHints[i] ?? ''}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {score.mpmBonus && (
+        <div className="border-t border-white/[0.07] bg-gp-bg3/50 px-5 py-4">
+          <p className="mb-2 font-heading text-[10px] font-semibold uppercase tracking-[0.08em] text-gp-text3">
+            Bónus MPM (modelagem)
+          </p>
+          <p className="text-sm text-gp-text2">
+            <strong className="font-medium text-gp-text">
+              +{score.mpmBonus.pontos} pontos
+            </strong>{' '}
+            com base no índice de potencial de modelagem{' '}
+            <span className="gp-mono-nums font-medium text-gp-text">
+              {score.mpmBonus.mpmIndice}
+            </span>
+            . Este valor entra no total do Gem acima.
+          </p>
+        </div>
+      )}
+
+      {score.nichoBonus && (
+        <div className="border-t border-white/[0.07] bg-gp-gold/5 px-5 py-4">
+          <p className="mb-3 flex items-center gap-2 text-xs font-semibold text-gp-gold">
+            <Sparkles className="h-3.5 w-3.5" />
+            Potencial do nicho (referência)
+          </p>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="rounded-lg bg-gp-bg4 py-2">
+              <p className="text-[10px] text-gp-text3">RPM médio</p>
+              <p className="gp-mono-nums text-sm font-medium text-gp-green">
+                ${score.nichoBonus.rpmMedio}
+              </p>
+            </div>
+            <div className="rounded-lg bg-gp-bg3 py-2">
+              <p className="text-[10px] text-gp-text3">Viralidade</p>
+              <p className="gp-mono-nums text-sm font-medium text-gp-gold">
+                {score.nichoBonus.viralidade}/10
+              </p>
+            </div>
+            <div className="rounded-lg bg-gp-bg3 py-2">
+              <p className="text-[10px] text-gp-text3">Equilíbrio</p>
+              <p className="gp-mono-nums text-sm font-medium text-gp-gold">
+                {score.nichoBonus.potencialOuro}/10
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SinalRowV3({
+  titulo,
+  sinal,
+  icon: Icon,
+  iconWrap,
+  barClass,
+}: {
+  titulo: string
+  sinal: GemScoreSinaisV3[keyof GemScoreSinaisV3]
+  icon: React.ComponentType<{ className?: string }>
+  iconWrap: string
+  barClass: string
+}) {
+  const pct = Math.min(
+    100,
+    Math.round((sinal.pontos / Math.max(1, sinal.max)) * 100)
+  )
+  return (
+    <div className="gp-signal-row">
+      <span
+        className={cn(
+          'mx-auto flex size-7 shrink-0 items-center justify-center rounded-md sm:mx-0',
+          iconWrap
+        )}
+      >
+        <Icon className="size-3.5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[13px] font-medium text-gp-text">{titulo}</p>
+        <p className="mb-2 mt-0.5 text-[11px] leading-snug text-gp-text3">
+          {sinal.formula}
+        </p>
+        <div className="mb-1 h-1 overflow-hidden rounded-sm bg-gp-bg4">
+          <div
+            className={cn('h-full rounded-sm transition-all', barClass)}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="gp-mono-nums text-[11px] text-gp-text2">
+          {sinal.resultado}
+        </p>
+      </div>
+      <div className="text-right sm:pt-0">
+        <p className="gp-mono-nums text-xs font-medium text-gp-text">
+          {sinal.pontos}
+          <span className="font-normal text-gp-text3">/{sinal.max}</span>
+        </p>
+        <p className="gp-mono-nums mt-0.5 text-[11px] text-gp-text3">
+          {pct}%
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function GemScorePanelV2({
   score,
   totalViewsCanal,
 }: {
@@ -142,13 +453,17 @@ export function GemScorePanel({
   totalViewsCanal?: number | null
 }) {
   const tier = tierMeta[score.classificacao] || tierMeta.fraco
-  const breakdown = normalizeBreakdown(score.breakdown)
+  const breakdown = normalizeBreakdownV2(score.breakdown)
   const nb = score.nichoBonus
 
   return (
     <div className="overflow-hidden rounded-xl border border-[#272727] bg-[#181818] shadow-sm">
       <div className="grid gap-6 p-5 sm:grid-cols-[auto_1fr] sm:items-center">
-        <ScoreRing value={score.total} strokeClass={tier.ring} />
+        <ScoreRing
+          value={score.total}
+          strokeClass={tier.ring}
+          centerClassName={tier.text}
+        />
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-lg font-semibold tracking-tight">Gem Score</h3>
@@ -160,6 +475,9 @@ export function GemScorePanel({
               )}
             >
               {tier.label}
+            </span>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+              modelo anterior
             </span>
           </div>
           <p className="text-sm leading-relaxed text-muted-foreground">
@@ -182,46 +500,46 @@ export function GemScorePanel({
 
       <div className="space-y-3 border-t border-[#272727] bg-[#212121]/60 px-5 py-4">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Critérios (máx. 100 pts)
+          Critérios legados (máx. 100 pts)
         </p>
-        <ScoreRow
+        <ScoreRowV2
           icon={Gauge}
           label="Views por inscrito"
           hint="Quanto o vídeo supera o tamanho da base"
           value={breakdown.viewsPorInscrito}
-          max={MAX.viewsPorInscrito}
+          max={MAX_V2.viewsPorInscrito}
           barClass="bg-sky-500"
         />
-        <ScoreRow
+        <ScoreRowV2
           icon={Rocket}
           label="Velocidade"
           hint="Views por dia desde a publicação"
           value={breakdown.velocidade}
-          max={MAX.velocidade}
+          max={MAX_V2.velocidade}
           barClass="bg-[#ff0000]"
         />
-        <ScoreRow
+        <ScoreRowV2
           icon={Layers}
           label="Consistência"
           hint="Vídeos fortes em relação aos inscritos"
           value={breakdown.consistencia}
-          max={MAX.consistencia}
+          max={MAX_V2.consistencia}
           barClass="bg-amber-500"
         />
-        <ScoreRow
+        <ScoreRowV2
           icon={Scale}
           label="Tamanho do canal"
           hint="Bônus para canais menores"
           value={breakdown.tamanhoCanal}
-          max={MAX.tamanhoCanal}
+          max={MAX_V2.tamanhoCanal}
           barClass="bg-emerald-500"
         />
-        <ScoreRow
+        <ScoreRowV2
           icon={Globe2}
           label="Alcance do canal"
           hint="Volume histórico de views do canal"
           value={breakdown.alcanceCanal}
-          max={MAX.alcanceCanal}
+          max={MAX_V2.alcanceCanal}
           barClass="bg-cyan-500"
         />
       </div>
@@ -274,43 +592,57 @@ export function GemScorePanel({
   )
 }
 
-function ScoreRing({ value, strokeClass }: { value: number; strokeClass: string }) {
+function ScoreRing({
+  value,
+  strokeClass,
+  centerClassName,
+}: {
+  value: number
+  strokeClass: string
+  /** Cor do número central (tier Gem) */
+  centerClassName?: string
+}) {
   const pct = Math.min(100, Math.max(0, value))
-  const r = 42
+  const r = 40
   const c = 2 * Math.PI * r
   const dash = (pct / 100) * c
 
   return (
-    <div className="relative mx-auto size-[100px] shrink-0 sm:mx-0">
+    <div className="relative mx-auto size-24 shrink-0 sm:mx-0">
       <svg
-        viewBox="0 0 100 100"
+        viewBox="0 0 96 96"
         className="size-full -rotate-90"
         aria-hidden
       >
         <circle
-          cx="50"
-          cy="50"
+          cx="48"
+          cy="48"
           r={r}
           fill="none"
-          className="stroke-muted/40"
-          strokeWidth="10"
+          className="stroke-gp-bg4"
+          strokeWidth="7"
         />
         <circle
-          cx="50"
-          cy="50"
+          cx="48"
+          cy="48"
           r={r}
           fill="none"
           className={cn('transition-all duration-500', strokeClass)}
-          strokeWidth="10"
+          strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={`${dash} ${c}`}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold tabular-nums leading-none tracking-tight">
+        <span
+          className={cn(
+            'gp-mono-nums text-[28px] font-medium leading-none',
+            centerClassName ?? 'text-gp-text'
+          )}
+        >
           {value}
         </span>
-        <span className="mt-0.5 text-[10px] font-medium text-muted-foreground">
+        <span className="gp-mono-nums mt-0.5 text-[10px] text-gp-text3">
           de 100
         </span>
       </div>
@@ -318,7 +650,7 @@ function ScoreRing({ value, strokeClass }: { value: number; strokeClass: string 
   )
 }
 
-function ScoreRow({
+function ScoreRowV2({
   icon: Icon,
   label,
   hint,
@@ -361,6 +693,6 @@ function formatCompact(n: number): string {
     return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`
   if (n >= 1_000_000)
     return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`
   return n.toLocaleString('pt-BR')
 }

@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { GemScoreBadge } from '@/components/garimpo/GemScore'
 import { ChannelStatusBadge } from '@/components/biblioteca/ChannelStatusBadge'
-import { MpmBadge } from '@/components/biblioteca/PotencialModelagemPanel'
 import {
   Select,
   SelectContent,
@@ -16,10 +15,33 @@ import {
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Library, RefreshCw, Loader2, Trash2, Search, Users, Eye } from 'lucide-react'
-import { viewsTotaisBarInnerStyle } from '@/lib/views-totais-bar'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import type { CanalStatus, GemScoreDetalhado, PotencialModelagem } from '@/types'
+import {
+  lerFiltrosBiblioteca,
+  salvarFiltrosBiblioteca,
+} from '@/lib/biblioteca-filtros-storage'
+
+const BIB_SEARCH_MAX = 200
+
+const BIB_STATUS_LABEL: Record<string, string> = {
+  all: 'Todos os status',
+  novo: 'Novo',
+  analisando: 'Analisando',
+  promissor: 'Promissor',
+  pronto_raio_x: 'Mochila pronta',
+  modelando: 'Modelando',
+  descartado: 'Descartado',
+}
+
+const BIB_ORDER_LABEL: Record<string, string> = {
+  criadoEm: 'Data adicionado',
+  gemScore: 'Gem Score',
+  inscritos: 'Inscritos',
+  nome: 'Nome',
+  totalViews: 'Views totais',
+}
 
 interface CanalListItem {
   id: string
@@ -34,7 +56,6 @@ interface CanalListItem {
   gemScoreDetalhado: string | null
   status: string
   nichoInferido: string | null
-  frequenciaPostagem: string | null
   criadoEm: string
   _count: { videos: number; projetos: number }
   potencialModelagem?: PotencialModelagem
@@ -47,12 +68,26 @@ export default function BibliotecaPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [orderBy, setOrderBy] = useState<string>('criadoEm')
   const [searchQuery, setSearchQuery] = useState('')
+  const [filtrosHydrated, setFiltrosHydrated] = useState(false)
 
   useEffect(() => {
-    fetchCanais()
-  }, [statusFilter, orderBy])
+    const s = lerFiltrosBiblioteca()
+    setStatusFilter(s.statusFilter)
+    setOrderBy(s.orderBy)
+    setSearchQuery(s.searchQuery.slice(0, BIB_SEARCH_MAX))
+    setFiltrosHydrated(true)
+  }, [])
 
-  async function fetchCanais() {
+  useEffect(() => {
+    if (!filtrosHydrated) return
+    salvarFiltrosBiblioteca({
+      statusFilter,
+      orderBy,
+      searchQuery: searchQuery.slice(0, BIB_SEARCH_MAX),
+    })
+  }, [filtrosHydrated, statusFilter, orderBy, searchQuery])
+
+  const fetchCanais = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams()
     if (statusFilter !== 'all') params.set('status', statusFilter)
@@ -63,7 +98,12 @@ export default function BibliotecaPage() {
     const data = await res.json()
     setCanais(data)
     setLoading(false)
-  }
+  }, [statusFilter, orderBy])
+
+  useEffect(() => {
+    if (!filtrosHydrated) return
+    void fetchCanais()
+  }, [filtrosHydrated, fetchCanais])
 
   async function handleDeleteChannel(id: string, nome: string, e: React.MouseEvent) {
     e.preventDefault()
@@ -135,7 +175,11 @@ export default function BibliotecaPage() {
 
             <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
               <SelectTrigger className="h-10 min-h-10 w-full rounded-full border-[#303030] bg-[#212121] py-0 text-sm text-[#aaaaaa] sm:w-44">
-                <SelectValue />
+                <SelectValue>
+                  {(value) =>
+                    BIB_STATUS_LABEL[String(value ?? '')] || String(value ?? '')
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
@@ -150,12 +194,16 @@ export default function BibliotecaPage() {
 
             <Select value={orderBy} onValueChange={(v) => v && setOrderBy(v)}>
               <SelectTrigger className="h-10 min-h-10 w-full rounded-full border-[#303030] bg-[#212121] py-0 text-sm text-[#aaaaaa] sm:w-44">
-                <SelectValue />
+                <SelectValue>
+                  {(value) =>
+                    BIB_ORDER_LABEL[String(value ?? '')] || String(value ?? '')
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="criadoEm">Data adicionado</SelectItem>
                 <SelectItem value="gemScore">Gem Score</SelectItem>
-                <SelectItem value="mpm">MPM (modelagem)</SelectItem>
+                <SelectItem value="totalViews">Views totais</SelectItem>
                 <SelectItem value="inscritos">Inscritos</SelectItem>
                 <SelectItem value="nome">Nome</SelectItem>
               </SelectContent>
@@ -182,7 +230,11 @@ export default function BibliotecaPage() {
                 if (canal.gemScoreDetalhado) {
                   try {
                     const parsed = JSON.parse(canal.gemScoreDetalhado)
-                    if (parsed?.total != null && parsed?.breakdown && parsed?.classificacao) {
+                    if (
+                      parsed?.total != null &&
+                      parsed?.classificacao &&
+                      (parsed?.breakdown || parsed?.sinais)
+                    ) {
                       gemScoreData = parsed
                     }
                   } catch {
@@ -234,9 +286,6 @@ export default function BibliotecaPage() {
                             {canal.nome}
                           </h3>
                           <ChannelStatusBadge status={canal.status as CanalStatus} />
-                          {canal.potencialModelagem && (
-                            <MpmBadge potencial={canal.potencialModelagem} />
-                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#717171]">
                           {canal.inscritos != null && canal.inscritos > 0 && (
@@ -251,20 +300,21 @@ export default function BibliotecaPage() {
                               {formatNum(canal.totalViews)} views
                             </span>
                           )}
-                          {canal.frequenciaPostagem && (
-                            <span className="uppercase tracking-wide">
-                              {canal.frequenciaPostagem}
-                            </span>
-                          )}
-                          {canal._count.videos > 0 && (
-                            <span>{canal._count.videos} vídeos salvos</span>
-                          )}
+                          {canal.videosPublicados != null &&
+                            canal.videosPublicados > 0 && (
+                              <span>
+                                {formatNum(canal.videosPublicados)} vídeos no
+                                canal
+                              </span>
+                            )}
                         </div>
-                        <div className="h-1 w-full overflow-hidden rounded-full bg-[#272727]">
+                        <div
+                          className="h-0.5 w-full overflow-hidden rounded-sm bg-gp-bg4"
+                          title={viewsBarTitle}
+                        >
                           <div
-                            className="h-full min-w-0 rounded-full transition-[width] duration-300"
-                            style={viewsTotaisBarInnerStyle(viewsBarPct)}
-                            title={viewsBarTitle}
+                            className="h-full min-w-0 rounded-sm bg-gp-gold/50 transition-[width] duration-300"
+                            style={{ width: `${viewsBarPct}%` }}
                           />
                         </div>
                       </div>

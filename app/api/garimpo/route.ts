@@ -9,8 +9,10 @@ import {
   type SearchResult,
 } from '@/lib/scraper/youtube'
 import { parseJoinDateYoutube } from '@/lib/scraper/channel-info'
-import { calcularGemScore } from '@/lib/scoring/gem-score'
-import { calcularPotencialModelagem } from '@/lib/scoring/potencial-modelagem'
+import {
+  calcularGemScore,
+  type GemScoreVideoInput,
+} from '@/lib/scoring/gem-score'
 import type { VideoGarimpo } from '@/types'
 
 const CHANNEL_FETCH_CONCURRENCY = 5
@@ -143,22 +145,28 @@ async function enrichSearchResults(
     const joinParsed = joinDateStr
       ? parseJoinDateYoutube(joinDateStr)
       : undefined
-    const potencial = calcularPotencialModelagem({
-      inscritos: Math.max(1, subs),
-      totalViews,
-      videosPublicados: videoCount > 0 ? videoCount : undefined,
-      dataCriacaoCanal: joinParsed,
-    })
+
+    const idadeCanalDias = joinParsed
+      ? Math.max(1, (Date.now() - joinParsed.getTime()) / 86400000)
+      : Math.max(1, (Date.now() - pubDate.getTime()) / 86400000)
+    const vc = videoCount > 0 ? videoCount : 1
+    const videosGem: GemScoreVideoInput[] = [
+      { views: s.views, dataPublicacao: pubDate },
+    ]
+
+    const pubYt = videoCount > 0 ? videoCount : null
 
     const gemScore = calcularGemScore(
-      { views: s.views, dataPublicacao: pubDate },
       {
         inscritos: Math.max(1, subs),
-        topVideos: [{ views: s.views }],
-        totalViews,
+        videos: videosGem,
+        totalViewsCanal: Math.max(0, totalViews),
+        videoCountCanal: vc,
+        idadeCanalDias,
+        videosPublicadosYoutube: pubYt,
       },
       undefined,
-      potencial.mpmIndice
+      undefined
     )
 
     out.push({
@@ -181,6 +189,7 @@ async function enrichSearchResults(
         inscritos: subs,
         thumbnailUrl: channelThumb,
         totalViews,
+        ...(pubYt != null ? { videosPublicados: pubYt } : {}),
       },
       gemScore,
     })

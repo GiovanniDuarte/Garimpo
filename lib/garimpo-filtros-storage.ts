@@ -1,16 +1,21 @@
-const STORAGE_KEY = 'garimpo:filtros-v1'
+import { normalizarDiasRecenciaSalvo } from '@/lib/garimpo-recencia-label'
+
+const STORAGE_KEY = 'garimpo:filtros-v2'
+const STORAGE_KEY_LEGACY = 'garimpo:filtros-v1'
 
 export type GarimpoFiltrosSalvos = {
   minViews: number
   maxInscritos: number
   dias: number
+  /** Painel de filtros aberto ou fechado */
+  filtersOpen?: boolean
+  /** Campo de pesquisa */
+  query?: string
 }
 
-export function lerFiltrosGarimpo(): GarimpoFiltrosSalvos | null {
-  if (typeof window === 'undefined') return null
+function parseSalvos(raw: string | null): GarimpoFiltrosSalvos | null {
+  if (!raw) return null
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
     const p = JSON.parse(raw) as Partial<GarimpoFiltrosSalvos>
     if (
       typeof p.minViews !== 'number' ||
@@ -22,11 +27,30 @@ export function lerFiltrosGarimpo(): GarimpoFiltrosSalvos | null {
     return {
       minViews: p.minViews,
       maxInscritos: p.maxInscritos,
-      dias: p.dias,
+      dias: normalizarDiasRecenciaSalvo(p.dias),
+      filtersOpen: typeof p.filtersOpen === 'boolean' ? p.filtersOpen : undefined,
+      query: typeof p.query === 'string' ? p.query : undefined,
     }
   } catch {
     return null
   }
+}
+
+export function lerFiltrosGarimpo(): GarimpoFiltrosSalvos | null {
+  if (typeof window === 'undefined') return null
+  const v2 = parseSalvos(localStorage.getItem(STORAGE_KEY))
+  if (v2) return v2
+  const legacy = parseSalvos(localStorage.getItem(STORAGE_KEY_LEGACY))
+  if (legacy) {
+    try {
+      localStorage.removeItem(STORAGE_KEY_LEGACY)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(legacy))
+    } catch {
+      // ignore
+    }
+    return legacy
+  }
+  return null
 }
 
 export function salvarFiltrosGarimpo(f: GarimpoFiltrosSalvos) {

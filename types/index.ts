@@ -8,16 +8,47 @@ export type CanalStatus =
 
 export type ProjetoStatus = 'ativo' | 'pausado' | 'arquivado'
 
+/** Critério individual do Gem Score v3 (painel). */
+export interface GemScoreSinalV3 {
+  pontos: number
+  max: number
+  formula: string
+  resultado: string
+}
+
+export interface GemScoreSinaisV3 {
+  autonomia: GemScoreSinalV3 & { ratioMultiplo: number }
+  aceleracao: GemScoreSinalV3 & {
+    multiplo: number
+    insuficiente?: boolean
+  }
+  densidadeHits: GemScoreSinalV3 & {
+    hits: number
+    totalVideos: number
+    pct: number
+  }
+  pressaoUnidade: GemScoreSinalV3 & { viewsPorDiaPorVideo: number }
+}
+
 export interface GemScoreDetalhado {
   total: number
-  breakdown: {
+  classificacao: 'pepita' | 'promissor' | 'mediano' | 'fraco'
+  /** v3 — omitido em snapshots antigos (v2). */
+  versao?: 2 | 3
+  /** v2 — legado. */
+  breakdown?: {
     viewsPorInscrito: number
     velocidade: number
     consistencia: number
     tamanhoCanal: number
     alcanceCanal: number
   }
-  classificacao: 'pepita' | 'promissor' | 'mediano' | 'fraco'
+  /** v3 — quatro sinais (máx. 100 pts antes do MPM). */
+  sinais?: GemScoreSinaisV3
+  /** Valores do rodapé do painel v3 (atalho visual). */
+  resumoRodape?: string[]
+  /** Aviso contextual (ex.: aceleração baixa). */
+  insight?: string
   nichoBonus?: {
     rpmMedio: number
     viralidade: number
@@ -60,6 +91,8 @@ export interface CanalResumo {
   inscritos: number
   thumbnailUrl: string
   totalViews?: number
+  /** Total público no YouTube (quando o scraper devolve). */
+  videosPublicados?: number
   dataCriacaoCanal?: string
   gemScore?: GemScoreDetalhado
 }

@@ -26,24 +26,28 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status') as CanalStatus | null
   const categoria = searchParams.get('categoria')
   const tag = searchParams.get('tag')
-  const orderByParam = searchParams.get('orderBy') as
-    | 'criadoEm'
-    | 'gemScore'
-    | 'inscritos'
-    | 'nome'
-    | 'mpm'
-    | null
-  const orderDir = searchParams.get('orderDir') as 'asc' | 'desc' | null
-
-  const dbOrderBy =
-    orderByParam && orderByParam !== 'mpm' ? orderByParam : undefined
+  const ORDER_FIELDS = [
+    'criadoEm',
+    'gemScore',
+    'inscritos',
+    'nome',
+    'totalViews',
+  ] as const
+  type OrderField = (typeof ORDER_FIELDS)[number]
+  const obRaw = searchParams.get('orderBy')
+  const orderByParam: OrderField = ORDER_FIELDS.includes(obRaw as OrderField)
+    ? (obRaw as OrderField)
+    : 'criadoEm'
+  const orderDirRaw = searchParams.get('orderDir')
+  const orderDir: 'asc' | 'desc' =
+    orderDirRaw === 'asc' || orderDirRaw === 'desc' ? orderDirRaw : 'desc'
 
   const canais = await listarCanais({
     status: status || undefined,
     categoria: categoria || undefined,
     tag: tag || undefined,
-    orderBy: dbOrderBy || undefined,
-    orderDir: orderDir || undefined,
+    orderBy: orderByParam,
+    orderDir,
   })
 
   const withPotencial = canais.map((c) => {
@@ -63,21 +67,7 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  let list = withPotencial
-
-  if (orderByParam === 'mpm') {
-    const asc = orderDir === 'asc'
-    list = [...list].sort((a, b) => {
-      const av = a.potencialModelagem.mpmIndice
-      const bv = b.potencialModelagem.mpmIndice
-      if (av == null && bv == null) return 0
-      if (av == null) return 1
-      if (bv == null) return -1
-      return asc ? av - bv : bv - av
-    })
-  }
-
-  return NextResponse.json(list)
+  return NextResponse.json(withPotencial)
 }
 
 export async function POST(req: NextRequest) {
@@ -333,7 +323,6 @@ async function enrichChannelData(body: {
       }
 
       if (topVideos.length > 0) {
-        const best = topVideos[0]
         const potencial = calcularPotencialModelagem({
           inscritos: subs,
           totalViews: enrichedData.totalViews ?? 0,
@@ -341,16 +330,41 @@ async function enrichChannelData(body: {
           dataCriacaoCanal: enrichedData.dataCriacaoCanal,
           frequenciaPostagem: enrichedData.frequenciaPostagem,
         })
+        const oldestPub = dates.length
+          ? new Date(Math.min(...dates.map((d) => d.getTime())))
+          : null
+        const idadeCanalDias = enrichedData.dataCriacaoCanal
+          ? Math.max(
+              1,
+              (Date.now() - enrichedData.dataCriacaoCanal.getTime()) /
+                86400000
+            )
+          : oldestPub
+            ? Math.max(1, (Date.now() - oldestPub.getTime()) / 86400000)
+            : 90
+        const totalV =
+          enrichedData.totalViews ??
+          parsedVideos.reduce((acc, v) => acc + Math.max(0, v.views), 0)
+        const vidCount =
+          enrichedData.videosPublicados && enrichedData.videosPublicados > 0
+            ? enrichedData.videosPublicados
+            : parsedVideos.length
+
         const gemScore = calcularGemScore(
           {
-            views: best.views,
-            dataPublicacao:
-              best.pubDate || new Date(Date.now() - 14 * 86400000),
-          },
-          {
-            inscritos: subs,
-            topVideos: topVideos.map((v) => ({ views: v.views })),
-            totalViews: enrichedData.totalViews ?? 0,
+            inscritos: Math.max(1, subs),
+            videos: parsedVideos.map((v) => ({
+              views: v.views,
+              dataPublicacao: v.pubDate ?? null,
+            })),
+            totalViewsCanal: Math.max(0, totalV),
+            videoCountCanal: Math.max(1, vidCount),
+            idadeCanalDias,
+            videosPublicadosYoutube:
+              enrichedData.videosPublicados != null &&
+              enrichedData.videosPublicados > 0
+                ? enrichedData.videosPublicados
+                : null,
           },
           nichoData,
           potencial.mpmIndice

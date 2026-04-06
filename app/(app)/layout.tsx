@@ -6,9 +6,9 @@ export default function AppShellLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-h-screen bg-[#0f0f0f] text-foreground">
+    <div className="flex min-h-screen bg-gp-bg text-foreground">
       <Sidebar />
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col bg-gp-bg">
         {children}
       </div>
     </div>

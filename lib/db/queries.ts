@@ -6,7 +6,7 @@ export async function listarCanais(filtros?: {
   status?: CanalStatus
   categoria?: string
   tag?: string
-  orderBy?: 'criadoEm' | 'gemScore' | 'inscritos' | 'nome'
+  orderBy?: 'criadoEm' | 'gemScore' | 'inscritos' | 'nome' | 'totalViews'
   orderDir?: 'asc' | 'desc'
 }) {
   const where: Record<string, unknown> = {}

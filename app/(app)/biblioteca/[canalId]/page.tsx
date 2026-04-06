@@ -19,15 +19,9 @@ import {
 import {
   Trash2,
   ExternalLink,
-  Calendar,
-  Users,
-  Eye,
-  Video,
-  Clock,
   Edit3,
   Check,
   X,
-  ArrowLeft,
   Loader2,
   Package,
   Download,
@@ -233,8 +227,9 @@ export default function CanalDetailPage({
         <Header title="Carregando…" />
         <PageWrapper>
           <div className="space-y-4">
-            <Skeleton className="h-44 w-full rounded-2xl bg-[#272727]" />
-            <Skeleton className="h-24 w-full rounded-xl bg-[#272727]" />
+            <Skeleton className="h-4 w-48 rounded bg-gp-bg4" />
+            <Skeleton className="h-64 w-full rounded-xl bg-gp-bg4" />
+            <Skeleton className="h-14 w-full rounded-lg bg-gp-bg4" />
           </div>
         </PageWrapper>
       </>
@@ -247,7 +242,11 @@ export default function CanalDetailPage({
   if (canal.gemScoreDetalhado) {
     try {
       const parsed = JSON.parse(canal.gemScoreDetalhado)
-      if (parsed?.total != null && parsed?.breakdown && parsed?.classificacao) {
+      if (
+        parsed?.total != null &&
+        parsed?.classificacao &&
+        (parsed?.breakdown || parsed?.sinais)
+      ) {
         gemScore = parsed
       }
     } catch {
@@ -264,6 +263,8 @@ export default function CanalDetailPage({
     .sort((a, b) => (b.views || 0) - (a.views || 0))
     .slice(0, 10)
 
+  const maxTopViews = topVideos[0]?.views ?? 0
+
   const idadeCanal = dataRefIdade ? calcularIdadeCanal(dataRefIdade) : null
   const idadeHint =
     canal.videos.some(
@@ -274,10 +275,16 @@ export default function CanalDetailPage({
       ? 'Desde a data do vídeo mais antigo com data na biblioteca.'
       : 'Sem datas nos vídeos guardados; usa a data de criação do canal no YouTube.'
 
+  const nichoCrumbs =
+    canal.nichoInferido
+      ?.split('>')
+      .map((s) => s.trim())
+      .filter(Boolean) ?? []
+
   return (
     <>
       <Header
-        title={canal.nome}
+        actionsOnly
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
             {canal.mochilaAt && (
@@ -286,7 +293,7 @@ export default function CanalDetailPage({
                 download
                 className={cn(
                   buttonVariants({ variant: 'default', size: 'sm' }),
-                  'rounded-full font-semibold shadow-sm'
+                  'rounded-lg font-semibold'
                 )}
                 title="Guardar o ficheiro .zip no computador"
               >
@@ -298,7 +305,7 @@ export default function CanalDetailPage({
               value={canal.status}
               onValueChange={(v) => v && handleStatusChange(v)}
             >
-              <SelectTrigger className="w-40 rounded-full border-[#303030] bg-[#212121] text-sm text-[#aaaaaa]">
+              <SelectTrigger className="w-40 rounded-lg border-white/[0.12] bg-gp-bg3 text-sm text-gp-text2">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -314,10 +321,10 @@ export default function CanalDetailPage({
               type="button"
               onClick={handleDeleteCanal}
               disabled={isDeleting}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                confirmDelete 
-                  ? 'bg-red-600 text-white hover:bg-red-700' 
-                  : 'text-[#717171] hover:bg-red-500/15 hover:text-red-400'
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                confirmDelete
+                  ? 'bg-gp-red text-white hover:opacity-90'
+                  : 'text-gp-text3 hover:bg-gp-red/10 hover:text-gp-red'
               }`}
               title="Remover canal"
             >
@@ -337,26 +344,24 @@ export default function CanalDetailPage({
       />
 
       <PageWrapper>
-        <div className="space-y-6">
-
-          {/* Back link */}
-          <Link
-            href="/biblioteca"
-            className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[#aaaaaa] transition-colors hover:text-white"
+        <div className="space-y-4">
+          <nav
+            className="mb-7 flex items-center gap-1.5 text-xs text-gp-text3"
+            aria-label="Trilho"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Biblioteca
-          </Link>
+            <Link
+              href="/biblioteca"
+              className="text-gp-text2 transition-colors hover:text-gp-text"
+            >
+              ← Biblioteca
+            </Link>
+            <span className="text-[10px]">›</span>
+            <span className="truncate text-gp-text3">{canal.nome}</span>
+          </nav>
 
-          {/* ── Channel hero (compacto: faixa fina em vez de banner alto vazio) ── */}
-          <section className="overflow-hidden rounded-2xl border border-[#272727] bg-[#181818]">
-            <div
-              className="h-1 bg-gradient-to-r from-[#272727] via-primary/40 to-[#272727]"
-              aria-hidden
-            />
-
-            <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:gap-5 sm:px-6 sm:py-5">
-              <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#272727] bg-[#272727] sm:size-[4.5rem] sm:border-[3px]">
+          <section className="gp-card overflow-hidden p-6">
+            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start">
+              <div className="flex size-[60px] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white/[0.12] bg-gp-bg4 font-heading text-[22px] font-bold text-gp-gold">
                 {canal.thumbnailUrl ? (
                   <img
                     src={`/api/canais/${canalId}/avatar`}
@@ -364,15 +369,14 @@ export default function CanalDetailPage({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <span className="text-2xl font-bold text-[#aaaaaa] sm:text-3xl">
-                    {canal.nome.charAt(0)}
-                  </span>
+                  canal.nome.charAt(0)
                 )}
               </div>
-
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl font-bold text-white">{canal.nome}</h2>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <h1 className="font-heading text-xl font-bold leading-tight tracking-wide text-gp-text">
+                    {canal.nome}
+                  </h1>
                   <ChannelStatusBadge status={canal.status as CanalStatus} />
                   {gemScore && <GemScoreBadge score={gemScore} size="md" />}
                 </div>
@@ -380,57 +384,81 @@ export default function CanalDetailPage({
                   href={canal.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex cursor-pointer items-center gap-1 text-xs text-[#aaaaaa] hover:text-primary"
+                  className="gp-mono-nums mb-2 flex cursor-pointer items-center gap-1 text-xs text-gp-text3 hover:text-gp-gold"
                 >
                   {canal.url.replace('https://www.youtube.com/', 'youtube.com/')}
                   <ExternalLink className="h-3 w-3" />
                 </a>
                 {canal.descricao && (
-                  <p className="mt-1 line-clamp-2 text-xs text-[#717171]">
+                  <p
+                    className="line-clamp-2 max-w-[540px] text-[13px] leading-relaxed text-gp-text2"
+                    title={canal.descricao}
+                  >
                     {canal.descricao}
                   </p>
                 )}
               </div>
             </div>
-          </section>
 
-          {/* ── Stats grid ── */}
-          <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            <MetricCard icon={Users} label="Inscritos" value={canal.inscritos ? formatNum(canal.inscritos) : '—'} />
-            <MetricCard icon={Eye} label="Views totais" value={canal.totalViews != null && canal.totalViews > 0 ? formatNum(canal.totalViews) : '—'} />
-            <MetricCard icon={Video} label="Vídeos" value={canal.videosPublicados ? formatNum(canal.videosPublicados) : '—'} />
-            <MetricCard
-              icon={Calendar}
-              label="Idade"
-              value={idadeCanal || '—'}
-              title={idadeHint}
-            />
-            <MetricCard icon={Clock} label="Frequência" value={canal.frequenciaPostagem || '—'} />
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.07] bg-white/[0.07] sm:grid-cols-5">
+              <StatStripCell
+                label="Inscritos"
+                value={canal.inscritos ? formatNum(canal.inscritos) : '—'}
+              />
+              <StatStripCell
+                label="Views totais"
+                value={
+                  canal.totalViews != null && canal.totalViews > 0
+                    ? formatNum(canal.totalViews)
+                    : '—'
+                }
+              />
+              <StatStripCell
+                label="Vídeos"
+                value={
+                  canal.videosPublicados
+                    ? formatNum(canal.videosPublicados)
+                    : '—'
+                }
+              />
+              <StatStripCell
+                label="Idade"
+                value={idadeCanal || '—'}
+                title={idadeHint}
+              />
+              <StatStripCell
+                label="Frequência"
+                value={canal.frequenciaPostagem || '—'}
+                valueTitle={canal.frequenciaPostagem || undefined}
+                plainValue
+                className="col-span-2 min-w-0 sm:col-span-1"
+              />
+            </div>
           </section>
 
           {canal.status === 'pronto_raio_x' && !canal.mochilaAt && (
             <div
               role="status"
-              className="flex gap-3 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+              className="flex gap-3 rounded-xl border border-gp-gold/30 bg-gp-gold/10 px-4 py-3 text-sm text-gp-text"
             >
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-gp-gold" />
               <div className="min-w-0 space-y-1">
-                <p className="font-semibold text-amber-50">
+                <p className="font-semibold text-gp-text">
                   Status «Mochila pronta» sem ZIP no servidor
                 </p>
-                <p className="text-amber-100/90">
+                <p className="text-gp-text2">
                   O estado do canal indica que a mochila está pronta, mas ainda não foi
                   gerado o arquivo .zip (ou foi apagado). Gere a mochila na secção{' '}
                   <a
                     href="#mochila"
-                    className="font-semibold text-white underline decoration-amber-400/80 underline-offset-2 hover:text-amber-50"
+                    className="font-semibold text-gp-gold underline decoration-gp-gold/50 underline-offset-2 hover:text-gp-text"
                   >
                     Mochila
                   </a>{' '}
                   abaixo para poder salvar no computador.
                 </p>
                 {canal.videos.length === 0 && (
-                  <p className="text-amber-100/80">
+                  <p className="text-gp-text3">
                     Este canal ainda não tem vídeos na biblioteca — usa «Atualizar» na
                     lista da biblioteca para sincronizar antes de gerar.
                   </p>
@@ -439,192 +467,272 @@ export default function CanalDetailPage({
             </div>
           )}
 
-          {/* ── Nicho ── */}
-          <section className="rounded-xl border border-[#272727] bg-[#181818] p-4">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[#717171]">Nicho</p>
-            <div className="flex items-center gap-2">
-              {editingNicho ? (
-                <>
-                  <Input
-                    value={nichoInput}
-                    onChange={(e) => setNichoInput(e.target.value)}
-                    className="max-w-sm border-[#303030] bg-[#212121] text-sm text-white focus-visible:ring-primary"
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveNicho()}
-                  />
-                  <button
-                    onClick={handleSaveNicho}
-                    className="rounded-full p-1.5 text-[#aaaaaa] transition-colors hover:bg-[#272727] hover:text-white"
-                  >
-                    <Check className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditingNicho(false)
-                      setNichoInput(canal.nichoInferido || '')
-                    }}
-                    className="rounded-full p-1.5 text-[#aaaaaa] transition-colors hover:bg-[#272727] hover:text-white"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="text-sm text-white">
-                    {canal.nichoInferido || 'Não identificado'}
-                  </span>
-                  <button
-                    onClick={() => setEditingNicho(true)}
-                    className="rounded-full p-1.5 text-[#717171] transition-colors hover:bg-[#272727] hover:text-white"
-                  >
-                    <Edit3 className="h-3.5 w-3.5" />
-                  </button>
-                </>
-              )}
-            </div>
+          <section className="flex flex-wrap items-center gap-2.5 rounded-lg border border-white/[0.07] bg-gp-bg2 px-4 py-3">
+            <span className="font-heading shrink-0 text-[11px] font-semibold uppercase tracking-wider text-gp-text3">
+              Nicho
+            </span>
+            {editingNicho ? (
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <Input
+                  value={nichoInput}
+                  onChange={(e) => setNichoInput(e.target.value)}
+                  className="max-w-md border-white/[0.12] bg-gp-bg3 text-sm text-gp-text focus-visible:ring-gp-gold"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveNicho()}
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveNicho}
+                  className="rounded-md p-1.5 text-gp-text2 transition-colors hover:bg-gp-bg3 hover:text-gp-text"
+                  aria-label="Guardar nicho"
+                >
+                  <Check className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingNicho(false)
+                    setNichoInput(canal.nichoInferido || '')
+                  }}
+                  className="rounded-md p-1.5 text-gp-text2 transition-colors hover:bg-gp-bg3 hover:text-gp-text"
+                  aria-label="Cancelar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-[13px] text-gp-text2">
+                  {nichoCrumbs.length > 0 ? (
+                    nichoCrumbs.map((part, idx) => (
+                      <span key={`${part}-${idx}`} className="contents">
+                        {idx > 0 && (
+                          <span className="text-[11px] text-gp-text3">›</span>
+                        )}
+                        {idx === nichoCrumbs.length - 1 ? (
+                          <strong className="font-medium text-gp-text">
+                            {part}
+                          </strong>
+                        ) : (
+                          <span>{part}</span>
+                        )}
+                      </span>
+                    ))
+                  ) : (
+                    <span>Não identificado</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingNicho(true)}
+                  className="ml-auto rounded p-1 text-[13px] text-gp-text3 transition-colors hover:text-gp-text2"
+                  aria-label="Editar nicho"
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
           </section>
 
-          {/* ── Mochila (ZIP) ── */}
+          {gemScore && (
+            <GemScorePanel
+              score={gemScore}
+              totalViewsCanal={canal.totalViews}
+              contextoCanal={{
+                videosNoCanal: canal.videosPublicados ?? null,
+                idadeMeses: dataRefIdade
+                  ? Math.max(
+                      1,
+                      Math.round(
+                        (Date.now() - dataRefIdade.getTime()) /
+                          (30 * 86400000)
+                      )
+                    )
+                  : 1,
+                inscritos: canal.inscritos ?? 0,
+                totalViews: canal.totalViews ?? 0,
+              }}
+            />
+          )}
+
           <section
             id="mochila"
-            className="scroll-mt-24 rounded-xl border border-[#272727] bg-[#181818] p-5"
+            className="gp-card scroll-mt-24 flex flex-col gap-4 p-5 sm:flex-row sm:items-start"
           >
-            <div className="mb-3 flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary" />
-              <h3 className="text-sm font-semibold text-white">Mochila</h3>
+            <div className="flex size-[38px] shrink-0 items-center justify-center rounded-lg border border-[rgba(232,169,58,0.35)] bg-gp-gold/10 text-lg text-gp-gold">
+              <Package className="size-5" strokeWidth={1.75} />
             </div>
-            <p className="mb-4 text-sm text-[#aaaaaa]">
-              Gera um <strong className="text-white">.zip</strong> com os teus
-              vídeos mais vistos na biblioteca. Cada pasta chama-se{' '}
-              <strong className="text-white">título do vídeo — id</strong>, com{' '}
-              <code className="text-[#e8e8e8]">ficha.txt</code>,{' '}
-              <code className="text-[#e8e8e8]">roteiro.txt</code>,{' '}
-              <code className="text-[#e8e8e8]">comentarios_top16.txt</code> (16
-              comentários com mais curtidas) e{' '}
-              <code className="text-[#e8e8e8]">thumbnail</code>. Dados via
-              InnerTube. Ao gerar de novo, o ZIP anterior é substituído.
-            </p>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-[#717171]">Quantidade:</span>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-heading mb-1 text-sm font-bold text-gp-text">
+                Mochila
+              </h3>
+              <p className="mb-3 text-xs leading-relaxed text-gp-text2">
+                Gera um{' '}
+                <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
+                  .zip
+                </code>{' '}
+                com os teus vídeos mais vistos na biblioteca. Cada pasta chama-se{' '}
+                <strong className="text-gp-text">título do vídeo — id</strong>, com{' '}
+                <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
+                  ficha.txt
+                </code>
+                ,{' '}
+                <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
+                  roteiro.txt
+                </code>
+                ,{' '}
+                <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
+                  comentarios_top16.txt
+                </code>{' '}
+                (16 comentários com mais curtidas) e{' '}
+                <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
+                  thumbnail
+                </code>
+                . Dados via InnerTube. Ao gerar de novo, o ZIP anterior é substituído.
+              </p>
+              <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-medium text-gp-text3">
+                  Quantidade:
+                </span>
                 {([7, 15, 25] as const).map((n) => (
                   <button
                     key={n}
                     type="button"
                     onClick={() => setMochilaN(n)}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                    className={cn(
+                      'rounded-lg border px-3 py-1 text-[11px] font-semibold font-heading transition-colors',
                       mochilaN === n
-                        ? 'bg-primary text-primary-foreground'
-                        : 'border border-[#303030] bg-[#212121] text-[#aaaaaa] hover:bg-[#272727]'
-                    }`}
+                        ? 'border-[rgba(232,169,58,0.35)] bg-gp-gold/15 text-gp-gold'
+                        : 'border-white/[0.12] bg-transparent text-gp-text2 hover:bg-gp-bg3 hover:text-gp-text'
+                    )}
                   >
                     Top {n}
                   </button>
                 ))}
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="rounded-full"
-                  disabled={mochilaBusy || canal.videos.length === 0}
-                  onClick={() => void handleGerarMochila()}
-                >
-                  {mochilaBusy ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Package className="mr-2 h-4 w-4" />
-                  )}
-                  {canal.mochilaAt ? 'Gerar mochila de novo' : 'Gerar mochila'}
-                </Button>
-                {canal.mochilaAt && (
-                  <a
-                    href={`/api/canais/${canalId}/mochila`}
-                    download
-                    className={cn(
-                      buttonVariants({ variant: 'secondary', size: 'sm' }),
-                      'rounded-full font-semibold'
-                    )}
-                  >
-                    <Download className="size-3.5" />
-                    Salvar ZIP
-                  </a>
-                )}
-              </div>
+              {canal.mochilaAt && (
+                <p className="mt-2 text-[11px] text-gp-text3">
+                  Última mochila:{' '}
+                  {new Date(canal.mochilaAt).toLocaleString('pt-BR')} —{' '}
+                  {canal.mochilaVideoCount ?? '—'} vídeo(s) no arquivo
+                </p>
+              )}
             </div>
-            {canal.mochilaAt && (
-              <p className="mt-3 text-xs text-[#717171]">
-                Última mochila:{' '}
-                {new Date(canal.mochilaAt).toLocaleString('pt-BR')} —{' '}
-                {canal.mochilaVideoCount ?? '—'} vídeo(s) no arquivo
-              </p>
-            )}
+            <div className="flex shrink-0 flex-col gap-2 sm:pt-1">
+              <Button
+                type="button"
+                size="sm"
+                className="rounded-lg border-0 bg-gp-gold font-semibold text-[#1a1000] hover:bg-[#f0b740]"
+                disabled={mochilaBusy || canal.videos.length === 0}
+                onClick={() => void handleGerarMochila()}
+              >
+                {mochilaBusy ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Package className="mr-2 h-4 w-4" />
+                )}
+                {canal.mochilaAt ? 'Gerar de novo' : 'Gerar mochila'}
+              </Button>
+              {canal.mochilaAt && (
+                <a
+                  href={`/api/canais/${canalId}/mochila`}
+                  download
+                  className={cn(
+                    buttonVariants({ variant: 'outline', size: 'sm' }),
+                    'rounded-lg border-white/[0.12] bg-transparent font-medium text-gp-text2 hover:bg-gp-bg3 hover:text-gp-text'
+                  )}
+                >
+                  <Download className="mr-2 size-3.5" />
+                  Salvar ZIP
+                </a>
+              )}
+            </div>
           </section>
 
-          {/* ── Gem Score Panel ── */}
-          {gemScore && (
-            <GemScorePanel score={gemScore} totalViewsCanal={canal.totalViews} />
-          )}
-
-          {/* ── Top Vídeos ── */}
           {topVideos.length > 0 && (
-            <section className="overflow-hidden rounded-xl border border-[#272727] bg-[#181818]">
-              <div className="border-b border-[#272727] px-5 py-4">
-                <h3 className="text-sm font-semibold text-white">
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="font-heading text-[13px] font-bold uppercase tracking-widest text-gp-text2">
                   Top Vídeos
-                  <span className="ml-2 text-xs font-normal text-[#717171]">
-                    por views
-                  </span>
                 </h3>
+                <span className="text-xs text-gp-text3">por views</span>
               </div>
-              <div className="divide-y divide-[#272727]">
-                {topVideos.map((v, i) => (
-                  <div
-                    key={v.id}
-                    className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[#212121]"
-                  >
-                    <span className="w-5 shrink-0 text-center text-xs text-[#717171]">
-                      {i + 1}
-                    </span>
-                    {v.thumbnailUrl && (
-                      <img
-                        src={v.thumbnailUrl}
-                        alt=""
-                        className="h-10 w-[72px] shrink-0 rounded-md object-cover"
-                      />
-                    )}
-                    <a
-                      href={v.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="min-w-0 flex-1 cursor-pointer truncate text-sm text-white hover:text-primary"
+              <div className="gp-card overflow-hidden p-0">
+                {topVideos.map((v, i) => {
+                  const pct =
+                    maxTopViews > 0 && v.views != null
+                      ? Math.max(1, Math.round((v.views / maxTopViews) * 100))
+                      : 0
+                  return (
+                    <div
+                      key={v.id}
+                      className="group grid grid-cols-[32px_52px_minmax(0,1fr)_auto] items-center gap-3.5 border-b border-white/[0.07] px-[18px] py-3.5 last:border-b-0 transition-colors hover:bg-gp-bg3"
                     >
-                      {v.titulo}
-                    </a>
-                    <span className="shrink-0 text-xs tabular-nums text-[#717171]">
-                      {v.views != null ? formatNum(v.views) : '—'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteVideo(v.id, e)}
-                      className={`shrink-0 rounded-full px-2 py-1 text-xs transition-all flex items-center gap-1 ${
-                        confirmVideoId === v.id
-                          ? 'bg-red-600 text-white opacity-100'
-                          : 'text-[#717171] opacity-0 group-hover:opacity-100 hover:bg-red-500/15 hover:text-red-400'
-                      }`}
-                    >
-                      {confirmVideoId === v.id ? (
-                        <>
-                          <Check className="h-3 w-3" />
-                          Confirmar?
-                        </>
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </div>
-                ))}
+                      <span className="gp-mono-nums text-center text-[13px] font-medium text-gp-text3">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <div className="relative h-[34px] w-[52px] shrink-0 overflow-hidden rounded-[5px] bg-gp-bg4">
+                        {v.thumbnailUrl ? (
+                          <img
+                            src={v.thumbnailUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gp-bg4 to-gp-bg3 text-base opacity-60">
+                            ▶
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <a
+                          href={v.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block truncate text-[13px] font-medium text-gp-text hover:text-gp-gold"
+                        >
+                          {v.titulo}
+                        </a>
+                        <p className="mt-0.5 text-[11px] text-gp-text3">
+                          {v.dataPublicacao
+                            ? formatRelativePt(v.dataPublicacao)
+                            : '—'}
+                        </p>
+                        <div className="mt-1.5 h-0.5 overflow-hidden rounded-sm bg-gp-bg4">
+                          <div
+                            className="h-full rounded-sm bg-gp-gold/50"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="gp-mono-nums whitespace-nowrap text-right text-[13px] font-medium text-gp-text2">
+                          {v.views != null ? formatNum(v.views) : '—'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteVideo(v.id, e)}
+                          className={cn(
+                            'rounded-md px-2 py-1 text-xs transition-all flex items-center gap-1',
+                            confirmVideoId === v.id
+                              ? 'bg-gp-red text-white opacity-100'
+                              : 'text-gp-text3 opacity-0 group-hover:opacity-100 hover:bg-gp-red/10 hover:text-gp-red'
+                          )}
+                        >
+                          {confirmVideoId === v.id ? (
+                            <>
+                              <Check className="h-3 w-3" />
+                              OK?
+                            </>
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            </section>
+            </div>
           )}
         </div>
       </PageWrapper>
@@ -632,29 +740,65 @@ export default function CanalDetailPage({
   )
 }
 
-function MetricCard({
-  icon: Icon,
+function StatStripCell({
   label,
   value,
   title,
+  className,
+  plainValue,
+  valueTitle,
 }: {
-  icon: React.ComponentType<{ className?: string }>
   label: string
   value: string
   title?: string
+  className?: string
+  /** Texto corrido (ex. frequência): uma linha, reticências, sem números mono */
+  plainValue?: boolean
+  /** Tooltip no valor (útil quando truncado) */
+  valueTitle?: string
 }) {
   return (
-    <div
-      className="rounded-xl border border-[#272727] bg-[#181818] p-4"
-      title={title}
-    >
-      <div className="mb-2 flex items-center gap-1.5 text-[#717171]">
-        <Icon className="h-3.5 w-3.5" />
-        <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
+    <div className={cn('min-w-0 bg-gp-bg3 px-4 py-3.5', className)} title={title}>
+      <div className="font-heading mb-1 text-[10px] font-semibold uppercase tracking-widest text-gp-text3">
+        {label}
       </div>
-      <p className="text-lg font-bold tabular-nums text-white">{value}</p>
+      <div
+        className={cn(
+          'min-w-0 font-medium leading-snug text-gp-text',
+          plainValue
+            ? 'truncate whitespace-nowrap font-sans text-[13px]'
+            : 'gp-mono-nums text-lg leading-none'
+        )}
+        title={valueTitle}
+      >
+        {value}
+      </div>
     </div>
   )
+}
+
+function formatRelativePt(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  const rtf = new Intl.RelativeTimeFormat('pt-BR', { numeric: 'auto' })
+  const deltaSec = Math.round((d.getTime() - Date.now()) / 1000)
+  const abs = Math.abs(deltaSec)
+  const pick: [number, Intl.RelativeTimeFormatUnit, number][] = [
+    [60, 'second', 1],
+    [3600, 'minute', 60],
+    [86400, 'hour', 3600],
+    [86400 * 7, 'day', 86400],
+    [86400 * 30, 'week', 86400 * 7],
+    [86400 * 365, 'month', 86400 * 30],
+    [Infinity, 'year', 86400 * 365],
+  ]
+  for (const [max, unit, div] of pick) {
+    if (abs < max) {
+      const n = Math.round(deltaSec / div)
+      return `Publicado ${rtf.format(n, unit)}`
+    }
+  }
+  return '—'
 }
 
 function formatNum(n: number): string {
