@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { GemScoreBadge } from '@/components/garimpo/GemScore'
@@ -50,7 +51,11 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
 }
 
-export default function GarimpoPage() {
+function GarimpoPageContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const appliedUrlRef = useRef<string | null>(null)
+
   const [query, setQuery] = useState('')
   const [minViews, setMinViews] = useState(15_000)
   const [maxInscritos, setMaxInscritos] = useState(1_000)
@@ -78,6 +83,32 @@ export default function GarimpoPage() {
     }
     setFiltrosHydrated(true)
   }, [])
+
+  /** Abrir /garimpo?ref=... (ex.: vindo da biblioteca) — preenche a busca como referência. */
+  useEffect(() => {
+    if (!filtrosHydrated) return
+    const raw = searchParams.get('ref')
+    if (!raw) return
+    if (appliedUrlRef.current === raw) return
+    appliedUrlRef.current = raw
+    let decoded = raw
+    try {
+      decoded = decodeURIComponent(raw)
+    } catch {
+      /* keep raw */
+    }
+    const trimmed = decoded.trim().slice(0, QUERY_MAX_LEN)
+    if (!trimmed) return
+    setQuery(trimmed)
+    setResults([])
+    setContinuation(null)
+    setSeedVideoId(null)
+    setReferenceChannelId(null)
+    toast.message(
+      'Referência carregada. Clica em Garimpar para buscar vídeos relacionados a este URL.'
+    )
+    router.replace('/garimpo', { scroll: false })
+  }, [filtrosHydrated, searchParams, router])
 
   useEffect(() => {
     if (!filtrosHydrated) return
@@ -681,4 +712,30 @@ function formatCompact(n: number): string {
     return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`
   return n.toLocaleString('pt-BR')
+}
+
+export default function GarimpoPage() {
+  return (
+    <Suspense
+      fallback={
+        <>
+          <Header
+            title="Garimpo"
+            description="Descubra vídeos com alto potencial de alcance e modelagem"
+          />
+          <PageWrapper>
+            <div className="space-y-6">
+              <div className="flex items-stretch gap-2">
+                <Skeleton className="h-10 min-h-10 flex-1 rounded-full bg-[#272727]" />
+                <Skeleton className="h-10 min-h-10 w-28 shrink-0 rounded-full bg-[#272727]" />
+              </div>
+              <VideoSkeletons />
+            </div>
+          </PageWrapper>
+        </>
+      }
+    >
+      <GarimpoPageContent />
+    </Suspense>
+  )
 }

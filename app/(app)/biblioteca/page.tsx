@@ -22,6 +22,7 @@ import {
   lerFiltrosBiblioteca,
   salvarFiltrosBiblioteca,
 } from '@/lib/biblioteca-filtros-storage'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 const BIB_SEARCH_MAX = 200
 
@@ -69,6 +70,10 @@ export default function BibliotecaPage() {
   const [orderBy, setOrderBy] = useState<string>('criadoEm')
   const [searchQuery, setSearchQuery] = useState('')
   const [filtrosHydrated, setFiltrosHydrated] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string
+    nome: string
+  } | null>(null)
 
   useEffect(() => {
     const s = lerFiltrosBiblioteca()
@@ -105,21 +110,10 @@ export default function BibliotecaPage() {
     void fetchCanais()
   }, [filtrosHydrated, fetchCanais])
 
-  async function handleDeleteChannel(id: string, nome: string, e: React.MouseEvent) {
+  function openDeleteChannel(id: string, nome: string, e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-    if (!confirm(`Remover "${nome}" da biblioteca?`)) return
-    try {
-      const res = await fetch(`/api/canais/${id}`, { method: 'DELETE' })
-      if (res.ok) {
-        toast.success(`"${nome}" removido.`)
-        setCanais((prev) => prev.filter((c) => c.id !== id))
-      } else {
-        toast.error('Erro ao remover canal.')
-      }
-    } catch {
-      toast.error('Erro ao remover canal.')
-    }
+    setDeleteTarget({ id, nome })
   }
 
   async function handleRefreshChannel(id: string, e: React.MouseEvent) {
@@ -156,6 +150,34 @@ export default function BibliotecaPage() {
 
   return (
     <>
+      <ConfirmDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Remover canal"
+        description={
+          deleteTarget ? (
+            <>
+              Remover «{deleteTarget.nome}» da biblioteca? Esta ação não pode ser
+              desfeita.
+            </>
+          ) : null
+        }
+        confirmLabel="Remover"
+        cancelLabel="Cancelar"
+        destructive
+        onConfirm={async () => {
+          if (!deleteTarget) return
+          const { id, nome } = deleteTarget
+          const res = await fetch(`/api/canais/${id}`, { method: 'DELETE' })
+          if (res.ok) {
+            toast.success(`"${nome}" removido.`)
+            setCanais((prev) => prev.filter((c) => c.id !== id))
+          } else {
+            toast.error('Erro ao remover canal.')
+            throw new Error('delete failed')
+          }
+        }}
+      />
       <Header
         title="Biblioteca"
         description="Canais salvos e organizados para análise"
@@ -336,7 +358,7 @@ export default function BibliotecaPage() {
                           )}
                         </button>
                         <button
-                          onClick={(e) => handleDeleteChannel(canal.id, canal.nome, e)}
+                          onClick={(e) => openDeleteChannel(canal.id, canal.nome, e)}
                           className="rounded-full p-2 text-[#717171] transition-colors hover:bg-red-500/15 hover:text-red-400"
                           title="Remover canal"
                         >

@@ -7,6 +7,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { GemScoreBadge, GemScorePanel } from '@/components/garimpo/GemScore'
 import { ChannelStatusBadge } from '@/components/biblioteca/ChannelStatusBadge'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -26,6 +27,9 @@ import {
   Package,
   Download,
   AlertCircle,
+  Crosshair,
+  RefreshCw,
+  Copy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
@@ -82,25 +86,10 @@ export default function CanalDetailPage({
   const [editingNicho, setEditingNicho] = useState(false)
   const [nichoInput, setNichoInput] = useState('')
 
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [confirmVideoId, setConfirmVideoId] = useState<string | null>(null)
+  const [canalDeleteOpen, setCanalDeleteOpen] = useState(false)
   const [mochilaN, setMochilaN] = useState<7 | 15 | 25>(7)
   const [mochilaBusy, setMochilaBusy] = useState(false)
-
-  useEffect(() => {
-    if (confirmDelete) {
-      const timer = setTimeout(() => setConfirmDelete(false), 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [confirmDelete])
-
-  useEffect(() => {
-    if (confirmVideoId) {
-      const timer = setTimeout(() => setConfirmVideoId(null), 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [confirmVideoId])
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     fetchCanal()
@@ -140,30 +129,29 @@ export default function CanalDetailPage({
     toast.success('Nicho atualizado')
   }
 
-  async function handleDeleteCanal(e: React.MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    
-    if (!confirmDelete) {
-      setConfirmDelete(true)
-      return
-    }
-
-    setIsDeleting(true)
+  async function handleRefreshPerfil() {
+    setRefreshing(true)
     try {
-      const res = await fetch(`/api/canais/${canalId}`, { method: 'DELETE' })
-      if (res.ok) {
-        toast.success('Canal removido')
-        router.push('/biblioteca')
-      } else {
-        toast.error('Erro ao remover canal')
-        setIsDeleting(false)
-        setConfirmDelete(false)
+      const res = await fetch('/api/canais', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: canalId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(
+          typeof data.error === 'string'
+            ? data.error
+            : 'Não foi possível atualizar o perfil.'
+        )
+        return
       }
+      await fetchCanal()
+      toast.success('Perfil sincronizado com o YouTube.')
     } catch {
-      toast.error('Erro ao remover canal')
-      setIsDeleting(false)
-      setConfirmDelete(false)
+      toast.error('Erro de rede ao atualizar.')
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -194,30 +182,6 @@ export default function CanalDetailPage({
       toast.error('Erro de rede ao gerar mochila.')
     } finally {
       setMochilaBusy(false)
-    }
-  }
-
-  async function handleDeleteVideo(videoId: string, e: React.MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-
-    if (confirmVideoId !== videoId) {
-      setConfirmVideoId(videoId)
-      return
-    }
-
-    try {
-      const res = await fetch(`/api/videos/${videoId}`, { method: 'DELETE' })
-      if (res.ok) {
-        setCanal((c) =>
-          c ? { ...c, videos: c.videos.filter((v) => v.id !== videoId) } : c
-        )
-        toast.success('Vídeo removido')
-      }
-    } catch {
-      toast.error('Erro ao remover vídeo')
-    } finally {
-      setConfirmVideoId(null)
     }
   }
 
@@ -266,14 +230,15 @@ export default function CanalDetailPage({
   const maxTopViews = topVideos[0]?.views ?? 0
 
   const idadeCanal = dataRefIdade ? calcularIdadeCanal(dataRefIdade) : null
-  const idadeHint =
-    canal.videos.some(
-      (v) =>
-        v.dataPublicacao != null &&
-        !isNaN(new Date(v.dataPublicacao).getTime())
-    )
-      ? 'Desde a data do vídeo mais antigo com data na biblioteca.'
-      : 'Sem datas nos vídeos guardados; usa a data de criação do canal no YouTube.'
+  const idadeHint = canal.dataCriacaoCanal
+    ? 'Desde a data de criação do canal no YouTube (join).'
+    : canal.videos.some(
+          (v) =>
+            v.dataPublicacao != null &&
+            !isNaN(new Date(v.dataPublicacao).getTime())
+        )
+      ? 'Sem data de criação no YouTube; usa o vídeo mais antigo com data na biblioteca.'
+      : 'Sem data de criação nem datas nos vídeos guardados.'
 
   const nichoCrumbs =
     canal.nichoInferido
@@ -283,6 +248,30 @@ export default function CanalDetailPage({
 
   return (
     <>
+      <ConfirmDialog
+        open={canalDeleteOpen}
+        onOpenChange={setCanalDeleteOpen}
+        title="Remover canal"
+        description={
+          <>
+            O canal «{canal.nome}» deixa de constar na biblioteca (vídeos e dados
+            guardados aqui são apagados). Não é possível desfazer.
+          </>
+        }
+        confirmLabel="Remover canal"
+        cancelLabel="Cancelar"
+        destructive
+        onConfirm={async () => {
+          const res = await fetch(`/api/canais/${canalId}`, { method: 'DELETE' })
+          if (res.ok) {
+            toast.success('Canal removido')
+            router.push('/biblioteca')
+          } else {
+            toast.error('Erro ao remover canal')
+            throw new Error('delete canal')
+          }
+        }}
+      />
       <Header
         actionsOnly
         action={
@@ -319,25 +308,29 @@ export default function CanalDetailPage({
             </Select>
             <button
               type="button"
-              onClick={handleDeleteCanal}
-              disabled={isDeleting}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                confirmDelete
-                  ? 'bg-gp-red text-white hover:opacity-90'
-                  : 'text-gp-text3 hover:bg-gp-red/10 hover:text-gp-red'
-              }`}
+              onClick={() => void handleRefreshPerfil()}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.12] bg-gp-bg3 px-3 py-1.5 text-xs font-semibold text-gp-text2 transition-colors hover:border-gp-gold/30 hover:text-gp-gold disabled:pointer-events-none disabled:opacity-50"
+              title="Buscar no YouTube: inscritos, views, avatar e vídeos recentes"
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 shrink-0" />
+              )}
+              <span className="hidden sm:inline">Atualizar</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setCanalDeleteOpen(true)
+              }}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-gp-text3 transition-colors hover:bg-gp-red/10 hover:text-gp-red"
               title="Remover canal"
             >
-              {isDeleting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : confirmDelete ? (
-                <>
-                  <Check className="h-3.5 w-3.5" />
-                  Confirmar Exclusão?
-                </>
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
+              <Trash2 className="h-4 w-4" />
             </button>
           </div>
         }
@@ -425,6 +418,8 @@ export default function CanalDetailPage({
                 label="Idade"
                 value={idadeCanal || '—'}
                 title={idadeHint}
+                valueTitle={idadeCanal || undefined}
+                nowrapValue
               />
               <StatStripCell
                 label="Frequência"
@@ -531,6 +526,12 @@ export default function CanalDetailPage({
                 </button>
               </>
             )}
+            <p className="basis-full text-[11px] leading-relaxed text-gp-text3">
+              Formato <span className="font-medium text-gp-text2">Categoria &gt; Subnicho</span>{' '}
+              (nomes exatos da taxonomia interna) para o RPM estimado no Gem coincidir com o
+              nicho. Na <strong className="font-medium text-gp-text2">Atualizar</strong>, a
+              classificação usa descrição + títulos dos vídeos recentes.
+            </p>
           </section>
 
           {gemScore && (
@@ -650,11 +651,32 @@ export default function CanalDetailPage({
 
           {topVideos.length > 0 && (
             <div>
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-heading text-[13px] font-bold uppercase tracking-widest text-gp-text2">
                   Top Vídeos
                 </h3>
-                <span className="text-xs text-gp-text3">por views</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const text = topVideos.map((v) => v.url).join('\n')
+                      try {
+                        await navigator.clipboard.writeText(text)
+                        toast.success(
+                          `${topVideos.length} URL(s) copiadas (uma por linha).`
+                        )
+                      } catch {
+                        toast.error('Não foi possível copiar. Permite clipboard no browser.')
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.12] bg-gp-bg3 px-2.5 py-1 text-[11px] font-semibold text-gp-text2 transition-colors hover:border-gp-gold/35 hover:text-gp-gold"
+                    title="Copiar todas as URLs desta lista, uma por linha"
+                  >
+                    <Copy className="h-3.5 w-3.5 shrink-0" />
+                    Copiar URLs
+                  </button>
+                  <span className="text-xs text-gp-text3">por views</span>
+                </div>
               </div>
               <div className="gp-card overflow-hidden p-0">
                 {topVideos.map((v, i) => {
@@ -665,7 +687,7 @@ export default function CanalDetailPage({
                   return (
                     <div
                       key={v.id}
-                      className="group grid grid-cols-[32px_52px_minmax(0,1fr)_auto] items-center gap-3.5 border-b border-white/[0.07] px-[18px] py-3.5 last:border-b-0 transition-colors hover:bg-gp-bg3"
+                      className="grid grid-cols-[32px_52px_minmax(0,1fr)_auto] items-center gap-2 border-b border-white/[0.07] px-[18px] py-3.5 last:border-b-0 transition-colors hover:bg-gp-bg3 sm:gap-3.5"
                     >
                       <span className="gp-mono-nums text-center text-[13px] font-medium text-gp-text3">
                         {String(i + 1).padStart(2, '0')}
@@ -704,29 +726,18 @@ export default function CanalDetailPage({
                           />
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
+                      <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-2">
                         <span className="gp-mono-nums whitespace-nowrap text-right text-[13px] font-medium text-gp-text2">
                           {v.views != null ? formatNum(v.views) : '—'}
                         </span>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteVideo(v.id, e)}
-                          className={cn(
-                            'rounded-md px-2 py-1 text-xs transition-all flex items-center gap-1',
-                            confirmVideoId === v.id
-                              ? 'bg-gp-red text-white opacity-100'
-                              : 'text-gp-text3 opacity-0 group-hover:opacity-100 hover:bg-gp-red/10 hover:text-gp-red'
-                          )}
+                        <Link
+                          href={`/garimpo?ref=${encodeURIComponent(v.url)}`}
+                          className="flex shrink-0 items-center gap-1 rounded-md border border-white/[0.1] bg-gp-bg4/60 px-2 py-1 text-[10px] font-semibold text-gp-text2 transition-colors hover:border-gp-gold/35 hover:text-gp-gold"
+                          title="Usar este vídeo como referência no Garimpo (vídeos relacionados)"
                         >
-                          {confirmVideoId === v.id ? (
-                            <>
-                              <Check className="h-3 w-3" />
-                              OK?
-                            </>
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                        </button>
+                          <Crosshair className="h-3 w-3 shrink-0" />
+                          <span className="hidden sm:inline">Garimpo</span>
+                        </Link>
                       </div>
                     </div>
                   )
@@ -747,6 +758,7 @@ function StatStripCell({
   className,
   plainValue,
   valueTitle,
+  nowrapValue,
 }: {
   label: string
   value: string
@@ -756,6 +768,8 @@ function StatStripCell({
   plainValue?: boolean
   /** Tooltip no valor (útil quando truncado) */
   valueTitle?: string
+  /** Uma linha só (ex. idade: «19 anos e 2 meses») */
+  nowrapValue?: boolean
 }) {
   return (
     <div className={cn('min-w-0 bg-gp-bg3 px-4 py-3.5', className)} title={title}>
@@ -767,7 +781,8 @@ function StatStripCell({
           'min-w-0 font-medium leading-snug text-gp-text',
           plainValue
             ? 'truncate whitespace-nowrap font-sans text-[13px]'
-            : 'gp-mono-nums text-lg leading-none'
+            : 'gp-mono-nums text-lg leading-none',
+          nowrapValue && 'truncate whitespace-nowrap'
         )}
         title={valueTitle}
       >

@@ -357,6 +357,11 @@ export async function getChannelInfo(channelId: string): Promise<ChannelInfo> {
         const vc = parseVideoCountFromAboutText(aboutStats.videoCountText)
         if (vc > 0) videoCount = vc
       }
+      const ytData = parseYtInitialDataFromAboutHtml(aboutHtml)
+      const joinedFromPage = ytData
+        ? findJoinedDateTextInYtData(ytData)
+        : null
+      if (joinedFromPage) joinDate = joinedFromPage
     }
   } catch {
     // ignore
@@ -378,9 +383,27 @@ export async function getChannelInfo(channelId: string): Promise<ChannelInfo> {
 
     if (aboutRes.ok) {
       const aboutData = await aboutRes.json()
-      const aboutStr = JSON.stringify(aboutData)
-      const joinMatch = aboutStr.match(/Joined\s+([\w\s,]+\d{4})/i)
-      if (joinMatch) joinDate = joinMatch[1].trim()
+      if (!joinDate) {
+        const fromTree = findJoinedDateTextInYtData(aboutData)
+        if (fromTree) joinDate = fromTree
+      }
+      if (!joinDate) {
+        const aboutStr = JSON.stringify(aboutData)
+        const joinPatterns = [
+          /Joined\s+([\w\s,.-–—]+\d{4})/i,
+          /Aderiu\s+(?:a|em)\s+([\w\s,.-–—º°]+\d{4})/iu,
+          /Se unió\s+(?:el|en)\s+([\w\s,.-–—]+\d{4})/iu,
+          /"text"\s*:\s*"(Joined[^"]*\d{4}[^"]*)"/i,
+          /"text"\s*:\s*"(Aderiu[^"]*\d{4}[^"]*)"/iu,
+        ]
+        for (const re of joinPatterns) {
+          const m = aboutStr.match(re)
+          if (m) {
+            joinDate = m[1].trim()
+            break
+          }
+        }
+      }
     }
   } catch {
     // ignore
@@ -502,6 +525,7 @@ function extractText(obj: any): string {
   if (!obj) return ''
   if (typeof obj === 'string') return obj
   if (obj.simpleText) return obj.simpleText
+  if (typeof obj.content === 'string' && obj.content.trim()) return obj.content
   if (obj.runs) return obj.runs.map((r: { text: string }) => r.text).join('')
   return ''
 }
@@ -536,6 +560,45 @@ function extractAboutChannelViewModelFromHtml(html: string): {
   try {
     const data = JSON.parse(m[1]) as unknown
     return findAboutChannelViewModel(data)
+  } catch {
+    return null
+  }
+}
+
+/** Data de entrada no canal: `joinedDateText` no ytInitialData / InnerTube (várias línguas). */
+function findJoinedDateTextInYtData(node: unknown): string | null {
+  if (node === null || typeof node !== 'object') return null
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const hit = findJoinedDateTextInYtData(item)
+      if (hit) return hit
+    }
+    return null
+  }
+  const o = node as Record<string, unknown>
+  if ('joinedDateText' in o && o.joinedDateText != null) {
+    const t = extractText(o.joinedDateText).trim()
+    if (t && /\d{4}/.test(t)) return t
+  }
+  if (
+    'channelAboutFullMetadataRenderer' in o &&
+    o.channelAboutFullMetadataRenderer != null
+  ) {
+    const hit = findJoinedDateTextInYtData(o.channelAboutFullMetadataRenderer)
+    if (hit) return hit
+  }
+  for (const k of Object.keys(o)) {
+    const hit = findJoinedDateTextInYtData(o[k])
+    if (hit) return hit
+  }
+  return null
+}
+
+function parseYtInitialDataFromAboutHtml(html: string): unknown | null {
+  const m = html.match(/var ytInitialData = ({[\s\S]+?});\s*<\/script>/)
+  if (!m) return null
+  try {
+    return JSON.parse(m[1]) as unknown
   } catch {
     return null
   }
@@ -607,29 +670,59 @@ function parseDurationText(text: string): number {
   return 0
 }
 
+/** Tolerância para relógio / scraping — datas além disto tratam-se como inválidas. */
+const PUBLISHED_FUTURE_TOLERANCE_MS = 48 * 3600 * 1000
+const PUBLISHED_MIN_YEAR = 2005
+
+/**
+ * Rejeita datas inválidas ou claramente no futuro (bugs de parse / lixo).
+ */
+export function clampPublishedDateForStorage(d: Date | null): Date | null {
+  if (!d || isNaN(d.getTime())) return null
+  const t = d.getTime()
+  if (t > Date.now() + PUBLISHED_FUTURE_TOLERANCE_MS) return null
+  return d
+}
+
+const RELATIVE_PUBLISHED_RE =
+  /(\d+)\s*(second|minute|hour|day|week|month|year)s?\s*ago/i
+
+/**
+ * Extrai data relativa (“3 days ago”, “Streamed 2 weeks ago”) ou absoluta parseável.
+ */
 export function parsePublishedDate(text: string): Date | null {
   if (!text) return null
 
-  const now = new Date()
-  const match = text.match(
-    /(\d+)\s*(second|minute|hour|day|week|month|year)s?\s*ago/i
-  )
-  if (!match) return null
+  const trimmed = text.trim().replace(/\s+/g, ' ')
+  const relMatch = trimmed.match(RELATIVE_PUBLISHED_RE)
+  if (relMatch) {
+    const amount = parseInt(relMatch[1], 10)
+    if (!Number.isFinite(amount) || amount < 0 || amount > 50_000) return null
+    const unit = relMatch[2].toLowerCase()
 
-  const amount = parseInt(match[1], 10)
-  const unit = match[2].toLowerCase()
+    const ms: Record<string, number> = {
+      second: 1000,
+      minute: 60 * 1000,
+      hour: 3600 * 1000,
+      day: 86400 * 1000,
+      week: 7 * 86400 * 1000,
+      month: 30 * 86400 * 1000,
+      year: 365 * 86400 * 1000,
+    }
 
-  const ms: Record<string, number> = {
-    second: 1000,
-    minute: 60 * 1000,
-    hour: 3600 * 1000,
-    day: 86400 * 1000,
-    week: 7 * 86400 * 1000,
-    month: 30 * 86400 * 1000,
-    year: 365 * 86400 * 1000,
+    const d = new Date(Date.now() - amount * (ms[unit] || 0))
+    return clampPublishedDateForStorage(d)
   }
 
-  return new Date(now.getTime() - amount * (ms[unit] || 0))
+  const abs = new Date(trimmed)
+  if (!isNaN(abs.getTime())) {
+    const y = abs.getFullYear()
+    const nowY = new Date().getFullYear()
+    if (y < PUBLISHED_MIN_YEAR || y > nowY + 1) return null
+    return clampPublishedDateForStorage(abs)
+  }
+
+  return null
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

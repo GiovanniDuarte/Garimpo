@@ -14,9 +14,10 @@ import {
 import {
   calcularFrequencia,
   parseJoinDateYoutube,
+  resolverDataReferenciaIdadeCanal,
 } from '@/lib/scraper/channel-info'
 import { calcularGemScore } from '@/lib/scoring/gem-score'
-import { detectarNicho, NICHOS } from '@/lib/nichos'
+import { detectarNicho, rpmENichoDoRotulo } from '@/lib/nichos'
 import { getCanalAvatarCached, clearCanalAvatarFiles } from '@/lib/canal-avatar-cache'
 import { calcularPotencialModelagem } from '@/lib/scoring/potencial-modelagem'
 import type { CanalStatus } from '@/types'
@@ -51,8 +52,10 @@ export async function GET(req: NextRequest) {
   })
 
   const withPotencial = canais.map((c) => {
-    const dataRefIdade =
-      c.videos[0]?.dataPublicacao ?? c.dataCriacaoCanal
+    const dataRefIdade = resolverDataReferenciaIdadeCanal(
+      c.videos.map((v) => ({ dataPublicacao: v.dataPublicacao })),
+      c.dataCriacaoCanal
+    )
     const { videos: _videosIdade, ...canalJson } = c
     return {
       ...canalJson,
@@ -60,7 +63,7 @@ export async function GET(req: NextRequest) {
         inscritos: c.inscritos,
         totalViews: c.totalViews,
         videosPublicados: c.videosPublicados,
-        dataCriacaoCanal: dataRefIdade,
+        dataCriacaoCanal: dataRefIdade ?? c.dataCriacaoCanal,
         frequenciaPostagem: c.frequenciaPostagem,
         videosSalvosCount: c._count.videos,
       }),
@@ -88,7 +91,7 @@ export async function POST(req: NextRequest) {
     try {
       const videos = await getChannelVideos(enrichedData.youtubeId, 20)
       for (const v of videos) {
-        const pubDate = parsePublishedText(v.publishedText)
+        const pubDate = parsePublishedDate(v.publishedText)
         try {
           await criarVideo({
             youtubeId: v.videoId,
@@ -98,7 +101,7 @@ export async function POST(req: NextRequest) {
             views: v.views,
             thumbnailUrl: v.thumbnailUrl,
             duracaoSegundos: v.duration,
-            dataPublicacao: pubDate || undefined,
+            dataPublicacao: pubDate ?? null,
           })
         } catch {
           // duplicate
@@ -145,13 +148,19 @@ export async function PUT(req: NextRequest) {
       )
     }
 
-    const enrichedData = await enrichChannelData({
-      youtubeId: existing.youtubeId,
-      nome: existing.nome,
-      url: existing.url,
-      inscritos: existing.inscritos ?? undefined,
-      thumbnailUrl: existing.thumbnailUrl ?? undefined,
-    })
+    const enrichedData = await enrichChannelData(
+      {
+        youtubeId: existing.youtubeId,
+        nome: existing.nome,
+        url: existing.url,
+        inscritos: existing.inscritos ?? undefined,
+        thumbnailUrl: existing.thumbnailUrl ?? undefined,
+      },
+      {
+        dataCriacaoCanal: existing.dataCriacaoCanal,
+        nichoInferido: existing.nichoInferido,
+      }
+    )
 
     const thumbChanged =
       (enrichedData.thumbnailUrl || '') !== (existing.thumbnailUrl || '')
@@ -175,7 +184,7 @@ export async function PUT(req: NextRequest) {
     if (thumbChanged) {
       updatePayload.avatarLocal = null
     }
-    if (enrichedData.dataCriacaoCanal) {
+    if (enrichedData.dataCriacaoCanal != null) {
       updatePayload.dataCriacaoCanal = enrichedData.dataCriacaoCanal
     }
     if (enrichedData.gemScore != null) {
@@ -200,7 +209,7 @@ export async function PUT(req: NextRequest) {
     try {
       const videos = await getChannelVideos(existing.youtubeId, 20)
       for (const v of videos) {
-        const pubDate = parsePublishedText(v.publishedText)
+        const pubDate = parsePublishedDate(v.publishedText)
         try {
           await criarVideo({
             youtubeId: v.videoId,
@@ -210,7 +219,7 @@ export async function PUT(req: NextRequest) {
             views: v.views,
             thumbnailUrl: v.thumbnailUrl,
             duracaoSegundos: v.duration,
-            dataPublicacao: pubDate || undefined,
+            dataPublicacao: pubDate ?? null,
           })
         } catch {
           // duplicate
@@ -230,16 +239,25 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-async function enrichChannelData(body: {
-  youtubeId: string
-  videoId?: string
-  nome?: string
-  url?: string
-  inscritos?: number
-  thumbnailUrl?: string
-  gemScore?: number
-  gemScoreDetalhado?: string
-}) {
+type EnrichExisting = {
+  dataCriacaoCanal?: Date | null
+  /** Mantém RPM do Gem alinhado ao nicho guardado se a deteção automática falhar. */
+  nichoInferido?: string | null
+}
+
+async function enrichChannelData(
+  body: {
+    youtubeId: string
+    videoId?: string
+    nome?: string
+    url?: string
+    inscritos?: number
+    thumbnailUrl?: string
+    gemScore?: number
+    gemScoreDetalhado?: string
+  },
+  existing?: EnrichExisting
+) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let enrichedData: Record<string, any> = { ...body }
   let channelId = body.youtubeId
@@ -259,6 +277,19 @@ async function enrichChannelData(body: {
       }
     }
 
+    let dataCriacaoMerged: Date | undefined
+    if (info.joinDate) {
+      const p = parseJoinDateYoutube(info.joinDate)
+      if (p && !isNaN(p.getTime())) dataCriacaoMerged = p
+    }
+    if (!dataCriacaoMerged && existing?.dataCriacaoCanal != null) {
+      const e =
+        existing.dataCriacaoCanal instanceof Date
+          ? existing.dataCriacaoCanal
+          : new Date(existing.dataCriacaoCanal)
+      if (!isNaN(e.getTime())) dataCriacaoMerged = e
+    }
+
     enrichedData = {
       ...enrichedData,
       youtubeId: channelId,
@@ -270,9 +301,7 @@ async function enrichChannelData(body: {
       thumbnailUrl: info.avatar || body.thumbnailUrl,
       pais: info.country || undefined,
       idiomaPrincipal: 'en',
-      dataCriacaoCanal: info.joinDate
-        ? parseJoinDateYoutube(info.joinDate)
-        : undefined,
+      dataCriacaoCanal: dataCriacaoMerged,
       url: info.url || body.url || `https://www.youtube.com/channel/${channelId}`,
     }
 
@@ -280,7 +309,7 @@ async function enrichChannelData(body: {
 
     if (videos.length > 0) {
       const parsedVideos = videos.map((v) => {
-        const pubDate = parsePublishedText(v.publishedText)
+        const pubDate = parsePublishedDate(v.publishedText)
         return { ...v, pubDate }
       })
 
@@ -307,41 +336,33 @@ async function enrichChannelData(body: {
         enrichedData.descricao || '',
         parsedVideos.map((v) => v.title)
       )
-      let nichoData: { rpmMedio: number; viralidade: number } | undefined
       if (nichoResult) {
         enrichedData.nichoInferido = `${nichoResult.nicho} > ${nichoResult.subNicho}`
-        const parentNicho = NICHOS.find((n) => n.nome === nichoResult.nicho)
-        const subNicho = parentNicho?.subNichos.find(
-          (s) => s.nome === nichoResult.subNicho
-        )
-        if (subNicho) {
-          nichoData = {
-            rpmMedio: (subNicho.rpmEstimado.min + subNicho.rpmEstimado.max) / 2,
-            viralidade: subNicho.viralidade,
-          }
-        }
       }
+      const nichoData =
+        rpmENichoDoRotulo(enrichedData.nichoInferido) ??
+        rpmENichoDoRotulo(existing?.nichoInferido) ??
+        undefined
 
       if (topVideos.length > 0) {
+        const oldestPub = dates.length
+          ? new Date(Math.min(...dates.map((d) => d.getTime())))
+          : null
+        const refIdadeDate =
+          enrichedData.dataCriacaoCanal ?? oldestPub ?? null
+        const refIdadeDias = refIdadeDate
+          ? Math.max(
+              1,
+              (Date.now() - refIdadeDate.getTime()) / 86400000
+            )
+          : 90
         const potencial = calcularPotencialModelagem({
           inscritos: subs,
           totalViews: enrichedData.totalViews ?? 0,
           videosPublicados: enrichedData.videosPublicados,
-          dataCriacaoCanal: enrichedData.dataCriacaoCanal,
+          dataCriacaoCanal: refIdadeDate ?? enrichedData.dataCriacaoCanal,
           frequenciaPostagem: enrichedData.frequenciaPostagem,
         })
-        const oldestPub = dates.length
-          ? new Date(Math.min(...dates.map((d) => d.getTime())))
-          : null
-        const idadeCanalDias = enrichedData.dataCriacaoCanal
-          ? Math.max(
-              1,
-              (Date.now() - enrichedData.dataCriacaoCanal.getTime()) /
-                86400000
-            )
-          : oldestPub
-            ? Math.max(1, (Date.now() - oldestPub.getTime()) / 86400000)
-            : 90
         const totalV =
           enrichedData.totalViews ??
           parsedVideos.reduce((acc, v) => acc + Math.max(0, v.views), 0)
@@ -359,7 +380,7 @@ async function enrichChannelData(body: {
             })),
             totalViewsCanal: Math.max(0, totalV),
             videoCountCanal: Math.max(1, vidCount),
-            idadeCanalDias,
+            idadeCanalDias: refIdadeDias,
             videosPublicadosYoutube:
               enrichedData.videosPublicados != null &&
               enrichedData.videosPublicados > 0
@@ -378,13 +399,4 @@ async function enrichChannelData(body: {
   }
 
   return enrichedData
-}
-
-function parsePublishedText(text: string): Date | null {
-  if (!text) return null
-  const match = text.match(
-    /(\d+)\s*(second|minute|hour|day|week|month|year)s?\s*ago/i
-  )
-  if (!match) return null
-  return parsePublishedDate(text)
 }

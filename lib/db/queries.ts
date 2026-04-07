@@ -131,7 +131,7 @@ export async function criarVideo(data: {
   views?: number
   likes?: number
   comentarios?: number
-  dataPublicacao?: Date
+  dataPublicacao?: Date | null
   duracaoSegundos?: number
   viewsPorDia?: number
   viewsPorInscrito?: number
