@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Pickaxe, Library } from 'lucide-react'
+import { Pickaxe, Library, Star, Crosshair } from 'lucide-react'
 import { GarimpoGemMark } from '@/components/brand/GarimpoGemMark'
 
 const links = [
@@ -16,6 +16,16 @@ const links = [
     href: '/biblioteca',
     label: 'Biblioteca',
     icon: Library,
+  },
+  {
+    href: '/favoritos',
+    label: 'Favoritos',
+    icon: Star,
+  },
+  {
+    href: '/mineirador',
+    label: 'Mineirador',
+    icon: Crosshair,
   },
 ]
 

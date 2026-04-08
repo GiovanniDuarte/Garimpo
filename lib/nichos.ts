@@ -47,6 +47,15 @@ export const NICHOS: Nicho[] = [
         rpmEstimado: { min: 14, max: 32 },
         viralidade: 5,
         palavrasChave: [
+          'old money',
+          'wealth',
+          'net worth',
+          'ultra rich',
+          'wealth building',
+          'wealth explained',
+          'financial markets',
+          'finance',
+          'financial',
           'renda passiva',
           'passive income',
           'fire',
@@ -82,6 +91,15 @@ export const NICHOS: Nicho[] = [
         rpmEstimado: { min: 12, max: 28 },
         viralidade: 7,
         palavrasChave: [
+          'wall street',
+          'ponzi',
+          'money laundering',
+          'launder',
+          'billionaire',
+          'corrupt',
+          'crypto fraud',
+          'markets',
+          'financial system',
           'economia',
           'economy',
           'fed',
@@ -185,6 +203,22 @@ export const NICHOS: Nicho[] = [
           'hormuz',
           'submarine',
           'fleet',
+          'special ops',
+          'special operations',
+          'special forces',
+          'forças especiais',
+          'forcas especiais',
+          'navy seals',
+          'navy seal',
+          'green berets',
+          'green beret',
+          'commando',
+          'delta force',
+          'paratrooper',
+          'airborne',
+          'sergeant',
+          'soldier',
+          'veteran',
         ],
       },
       {
@@ -282,11 +316,37 @@ export const NICHOS: Nicho[] = [
         viralidade: 6,
         palavrasChave: [
           'saúde mental',
+          'salud mental',
           'mental health',
+          'psicologia',
+          'psychology',
+          'psicoterapia',
+          'psychotherapy',
+          'terapia cognitiva',
+          'behavioral psychology',
+          'comportamento humano',
+          'comportamiento humano',
+          'human behavior',
+          'inteligência emocional',
+          'inteligencia emocional',
+          'emotional intelligence',
+          'relacionamentos',
+          'relaciones',
+          'relationships',
+          'desenvolvimento pessoal',
+          'desarrollo personal',
+          'autodesarrollo',
           'ansiedade',
+          'ansiedad',
+          'anxiety',
           'meditação',
+          'meditación',
           'mindfulness',
           'terapia',
+          'autoestima',
+          'autoconfiança',
+          'patrones mentales',
+          'padrões mentais',
           'produtividade',
         ],
       },
@@ -325,6 +385,18 @@ export const NICHOS: Nicho[] = [
           'world war',
           'império',
           'ancient',
+          'tsunami',
+          'terremoto',
+          'earthquake',
+          'desastre natural',
+          'catastrofe',
+          'catastrophe',
+          'chernobyl',
+          'titanic',
+          'torres gemeas',
+          'great fire',
+          'incendio de londres',
+          'colapso',
         ],
       },
       {
@@ -351,6 +423,15 @@ export const NICHOS: Nicho[] = [
         rpmEstimado: { min: 3, max: 12 },
         viralidade: 9,
         palavrasChave: [
+          'vs',
+          'battle',
+          'showdown',
+          'monster',
+          'beast',
+          'predator',
+          'king kong',
+          'megalodon',
+          'giant shark',
           'react',
           'reação',
           'trailer',
@@ -545,16 +626,99 @@ export const NICHOS: Nicho[] = [
 export function normalizarParaMatch(s: string): string {
   return s
     .toLowerCase()
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
 }
 
+/**
+ * Fallback quando só há a categoria oficial do vídeo no YouTube (player API).
+ * Rótulos em inglês (ID ou texto).
+ */
+export function nichoAPartirCategoriaYoutube(
+  categoria: string | null | undefined
+): { nicho: string; subNicho: string } | null {
+  const c = normalizarParaMatch(categoria || '').trim()
+  if (c.length < 2) return null
+
+  if (c.includes('news') && (c.includes('polit') || c.includes('politic'))) {
+    return {
+      nicho: 'Notícias & Geopolítica',
+      subNicho: 'Notícias gerais & análise',
+    }
+  }
+  if (c.includes('gaming')) {
+    return { nicho: 'Gaming', subNicho: 'Gameplay & Let’s play' }
+  }
+  if (c.includes('education')) {
+    return { nicho: 'Educação', subNicho: 'Ciência & exatas' }
+  }
+  if (c.includes('entertainment')) {
+    return { nicho: 'Entretenimento', subNicho: 'Cultura pop & react' }
+  }
+  if (c.includes('science') && c.includes('technology')) {
+    return { nicho: 'Tecnologia', subNicho: 'IA & software' }
+  }
+  if (c.includes('howto') || c.includes('style')) {
+    return { nicho: 'Lifestyle & Família', subNicho: 'Vlog & rotina' }
+  }
+  if (c.includes('sports') || c === 'sport') {
+    return { nicho: 'Esportes', subNicho: 'Outros esportes' }
+  }
+  if (c.includes('autos') || c.includes('vehicles')) {
+    return { nicho: 'Automotivo', subNicho: 'Carros & reviews' }
+  }
+  if (c.includes('comedy')) {
+    return { nicho: 'Entretenimento', subNicho: 'Comédia & sketches' }
+  }
+  if (c.includes('music')) {
+    return { nicho: 'Entretenimento', subNicho: 'Cultura pop & react' }
+  }
+  if (c.includes('film') || c.includes('animation')) {
+    return { nicho: 'Entretenimento', subNicho: 'Cultura pop & react' }
+  }
+  if (c.includes('pets') || c.includes('animals')) {
+    return { nicho: 'Lifestyle & Família', subNicho: 'Vlog & rotina' }
+  }
+  if (c.includes('travel')) {
+    return { nicho: 'Lifestyle & Família', subNicho: 'Vlog & rotina' }
+  }
+  if (c.includes('tech') && !c.includes('science')) {
+    return { nicho: 'Tecnologia', subNicho: 'Reviews de gadgets' }
+  }
+
+  return null
+}
+
+function tokenizarNormalizado(s: string): Set<string> {
+  const tokens = s
+    .split(/[^a-z0-9]+/i)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+  return new Set(tokens)
+}
+
+function keywordBateNoTexto(
+  textoNormalizado: string,
+  tokensTexto: Set<string>,
+  keywordNormalizada: string
+): boolean {
+  if (!keywordNormalizada) return false
+  // Evita falsos positivos como "ev" dentro de "every".
+  if (!keywordNormalizada.includes(' ') && keywordNormalizada.length <= 3) {
+    return tokensTexto.has(keywordNormalizada)
+  }
+  return textoNormalizado.includes(keywordNormalizada)
+}
+
 function pontuarSubnicho(blob: string, sub: SubNicho): number {
+  const tokensBlob = tokenizarNormalizado(blob)
   let score = 0
   for (const kw of sub.palavrasChave) {
     const k = normalizarParaMatch(kw)
     if (k.length < 2) continue
-    if (!blob.includes(k)) continue
+    if (!keywordBateNoTexto(blob, tokensBlob, k)) continue
     const w = k.length >= 10 ? 4 : k.length >= 6 ? 3 : k.length >= 4 ? 2 : 1
     score += w
   }
@@ -588,13 +752,16 @@ function pontuarSubnichoPorTopVideos(
   let score = 0
   for (const v of videos) {
     const titulo = normalizarParaMatch(v.titulo || '')
+    const tituloTokens = tokenizarNormalizado(titulo)
     const tagsNorm = (v.tags || [])
       .map((t) => normalizarParaMatch(t))
       .filter(Boolean)
     for (const kw of kws) {
       const base = pesoKeyword(kw)
-      const hitTitulo = titulo.includes(kw)
-      const hitTag = tagsNorm.some((t) => t === kw || t.includes(kw) || kw.includes(t))
+      const hitTitulo = keywordBateNoTexto(titulo, tituloTokens, kw)
+      const hitTag = tagsNorm.some((t) =>
+        keywordBateNoTexto(t, tokenizarNormalizado(t), kw)
+      )
       if (hitTitulo) score += base * 2
       if (hitTag) score += base * 3
     }
@@ -628,19 +795,87 @@ export function detectarNicho(
 }
 
 /**
- * Classifica por títulos + tags dos vídeos mais vistos (ideal: top 5).
- * A descrição do canal é deliberadamente ignorada para reduzir ruído.
+ * Classifica por títulos + tags dos top vídeos, descrição e nome do canal.
+ * Incluir nome reduz falhas quando a marca já diz o tema (“La Psicología…”).
  */
 export function detectarNichoTopVideos(
-  videos: AmostraNichoVideo[]
+  videos: AmostraNichoVideo[],
+  descricaoCanal?: string,
+  nomeCanal?: string
 ): { nicho: string; subNicho: string } | null {
-  if (!videos.length) return null
+  const nomeNorm = normalizarParaMatch(nomeCanal || '')
+  if (!videos.length && !descricaoCanal?.trim() && nomeNorm.length < 3) return null
   const top = videos.slice(0, 5)
+  const descricaoNorm = normalizarParaMatch(descricaoCanal || '')
+  const topBlob = normalizarParaMatch(top.map((v) => v.titulo).join(' '))
+  const contexto = `${topBlob} ${descricaoNorm} ${nomeNorm}`.trim()
+  const contextoTokens = tokenizarNormalizado(contexto)
+  const temSinalBattleEntertainment =
+    keywordBateNoTexto(contexto, contextoTokens, 'battle') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'showdown') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'vs') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'monster') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'beast') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'predator') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'king kong') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'megalodon')
+  const temSinalHistoriaDesastres =
+    keywordBateNoTexto(contexto, contextoTokens, 'tsunami') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'terremoto') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'earthquake') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'desastre natural') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'catastrofe') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'catastrophe') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'chernobyl') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'titanic') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'torres gemeas')
+  const temSinalHistoriaDidatica =
+    keywordBateNoTexto(contexto, contextoTokens, 'history') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'documentary') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'documentario') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'explained') ||
+    keywordBateNoTexto(contexto, contextoTokens, 'timeline')
   let melhor: { nicho: string; subNicho: string; score: number } | null = null
 
   for (const n of NICHOS) {
     for (const s of n.subNichos) {
-      const score = pontuarSubnichoPorTopVideos(top, s)
+      const scoreTop = pontuarSubnichoPorTopVideos(top, s)
+      // Descrição ajuda a desambiguar quando títulos/tags do top5 são genéricos.
+      const scoreDescricao =
+        descricaoNorm.length >= 8 ? pontuarSubnicho(descricaoNorm, s) : 0
+      // Nome do canal costuma ser marca + tema (“La Psicología…”, “Finance Insider”).
+      const scoreNome =
+        nomeNorm.length >= 4 ? pontuarSubnicho(nomeNorm, s) * 2 : 0
+      let score = scoreTop + scoreDescricao * 1.5 + scoreNome
+
+      // Conteúdo "batalha de monstros" tende a ser entretenimento, não história.
+      if (temSinalBattleEntertainment && n.nome === 'Entretenimento') {
+        score += 12
+      }
+      if (
+        temSinalBattleEntertainment &&
+        n.nome === 'Educação' &&
+        s.nome === 'História & humanidades' &&
+        !temSinalHistoriaDidatica
+      ) {
+        score -= 10
+      }
+      // "Reconstrução com IA" não deve virar nicho de software quando o tema
+      // principal são desastres/eventos históricos.
+      if (
+        temSinalHistoriaDesastres &&
+        n.nome === 'Tecnologia' &&
+        s.nome === 'IA & software'
+      ) {
+        score -= 14
+      }
+      if (
+        temSinalHistoriaDesastres &&
+        n.nome === 'Educação' &&
+        s.nome === 'História & humanidades'
+      ) {
+        score += 10
+      }
       if (score < SCORE_MINIMO_DETECCAO) continue
       if (!melhor || score > melhor.score) {
         melhor = { nicho: n.nome, subNicho: s.nome, score }

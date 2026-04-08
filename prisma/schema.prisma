@@ -32,12 +32,51 @@ model Canal {
   pais               String?
   mochilaAt          DateTime?
   mochilaVideoCount  Int?
+  favorito           Boolean   @default(false)
   criadoEm           DateTime  @default(now())
   atualizadoEm       DateTime  @updatedAt
 
-  videos   Video[]
-  analise  AnaliseDNA?
-  projetos Projeto[]
+  videos             Video[]
+  analise            AnaliseDNA?
+  projetos           Projeto[]
+  cacadaDescobertas  CacadaDescoberta[]
+}
+
+model Cacada {
+  id                     String   @id @default(cuid())
+  videoReferenciaId      String
+  canalReferenciaYtId    String?
+  minGem                   Float
+  exigirGem                Boolean  @default(true)
+  exigirFiltroMetricas     Boolean  @default(false)
+  capturaMinViews          Int      @default(0)
+  capturaMaxInscritos      Int?
+  capturaCombinacao        String   @default("E")
+  status                 String   @default("ativa")
+  // Acumulado: vídeos que passaram pela pipeline Gem nesta corrida (soma por passo).
+  videosAnalisadosTotal  Int      @default(0)
+  cursorRelated          String?
+  videoIdsVistosJson     String   @default("[]")
+  canalYoutubeVistosJson String   @default("[]")
+  ultimoLog              String?
+  criadoEm               DateTime @default(now())
+  atualizadoEm           DateTime @updatedAt
+
+  descobertas CacadaDescoberta[]
+}
+
+model CacadaDescoberta {
+  id            String   @id @default(cuid())
+  cacadaId      String
+  canalId       String
+  gemScore      Float
+  videoOrigemId String?
+  criadoEm      DateTime @default(now())
+
+  cacada Cacada @relation(fields: [cacadaId], references: [id], onDelete: Cascade)
+  canal  Canal  @relation(fields: [canalId], references: [id], onDelete: Cascade)
+
+  @@unique([cacadaId, canalId])
 }
 
 model Video {

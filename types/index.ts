@@ -26,6 +26,10 @@ export interface GemScoreSinaisV3 {
     hits: number
     totalVideos: number
     pct: number
+    /** % das views da amostra no vídeo mais visto (métrica de “one-hit”). */
+    concentracaoTopVideoPct?: number
+    /** Aplicado aos pontos de densidade após o critério ≥100k (0–1). */
+    multiplicadorDistribuicao?: number
   }
   pressaoUnidade: GemScoreSinalV3 & { viewsPorDiaPorVideo: number }
 }

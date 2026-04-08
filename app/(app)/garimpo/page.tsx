@@ -31,6 +31,7 @@ import type { VideoGarimpo } from '@/types'
 import {
   lerFiltrosGarimpo,
   salvarFiltrosGarimpo,
+  type GarimpoPresetId,
 } from '@/lib/garimpo-filtros-storage'
 import {
   RECENCIA_PUBLICACAO_OPCOES,
@@ -53,6 +54,69 @@ const STEP_INSCRITOS = 1_000
 
 const QUERY_MAX_LEN = 500
 
+type GarimpoPreset = {
+  id: GarimpoPresetId
+  titulo: string
+  subtitulo: string
+  minViews: number
+  maxInscritos: number
+  dias: RecenciaDias
+  videosCanalFaixa: GarimpoVideosCanalFaixaId
+}
+
+const GARIMPO_PRESETS: GarimpoPreset[] = [
+  {
+    id: 'small_traction',
+    titulo: 'Canal pequeno, tração alta',
+    subtitulo: 'Até 10 vídeos e sinais fortes de tração.',
+    minViews: 80_000,
+    maxInscritos: 25_000,
+    dias: 365,
+    videosCanalFaixa: 'ate10',
+  },
+  {
+    id: 'recent_explosion',
+    titulo: 'Explosão recente',
+    subtitulo: 'Vídeos recentes com views muito altas.',
+    minViews: 1_000_000,
+    maxInscritos: 120_000,
+    dias: 30,
+    videosCanalFaixa: 'qualquer',
+  },
+  {
+    id: 'asymmetry',
+    titulo: 'Assimetria views/sub',
+    subtitulo: 'Prioriza desproporção de views por inscrito.',
+    minViews: 120_000,
+    maxInscritos: 40_000,
+    dias: 365,
+    videosCanalFaixa: 'ate40',
+  },
+  {
+    id: 'new_channel_signal',
+    titulo: 'Canal novo com sinal',
+    subtitulo: 'Foco em canais enxutos e vídeos novos.',
+    minViews: 70_000,
+    maxInscritos: 30_000,
+    dias: 30,
+    videosCanalFaixa: 'ate20',
+  },
+  {
+    id: 'balanced_daily',
+    titulo: 'Uso diário (equilibrado)',
+    subtitulo: 'Mais volume com bom potencial.',
+    minViews: 10_000,
+    maxInscritos: 250_000,
+    dias: 365,
+    videosCanalFaixa: 'qualquer',
+  },
+]
+const DEFAULT_PRESET_ID: GarimpoPresetId = 'balanced_daily'
+
+function getPresetById(id: GarimpoPresetId): GarimpoPreset {
+  return GARIMPO_PRESETS.find((p) => p.id === id) || GARIMPO_PRESETS[0]!
+}
+
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
 }
@@ -63,11 +127,16 @@ function GarimpoPageContent() {
   const appliedUrlRef = useRef<string | null>(null)
 
   const [query, setQuery] = useState('')
-  const [minViews, setMinViews] = useState(15_000)
-  const [maxInscritos, setMaxInscritos] = useState(1_000)
+  const [minViews, setMinViews] = useState(getPresetById(DEFAULT_PRESET_ID).minViews)
+  const [maxInscritos, setMaxInscritos] = useState(
+    getPresetById(DEFAULT_PRESET_ID).maxInscritos
+  )
   const [videosCanalFaixa, setVideosCanalFaixa] =
-    useState<GarimpoVideosCanalFaixaId>('qualquer')
-  const [dias, setDias] = useState<RecenciaDias>(30)
+    useState<GarimpoVideosCanalFaixaId>(
+      getPresetById(DEFAULT_PRESET_ID).videosCanalFaixa
+    )
+  const [presetId, setPresetId] = useState<GarimpoPresetId>(DEFAULT_PRESET_ID)
+  const [dias, setDias] = useState<RecenciaDias>(getPresetById(DEFAULT_PRESET_ID).dias)
   const [filtrosHydrated, setFiltrosHydrated] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -83,12 +152,30 @@ function GarimpoPageContent() {
   useEffect(() => {
     const saved = lerFiltrosGarimpo()
     if (saved) {
-      setMinViews(clamp(saved.minViews, MIN_VIEWS_SLIDER, MAX_MIN_VIEWS_SLIDER))
-      setMaxInscritos(clamp(saved.maxInscritos, MIN_INSCRITOS_SLIDER, MAX_INSCRITOS_SLIDER))
-      setVideosCanalFaixa(normalizarFaixaVideosCanalSalva(saved.videosCanalFaixa))
-      setDias(saved.dias as RecenciaDias)
+      if (saved.presetId) {
+        setPresetId(saved.presetId)
+        setMinViews(clamp(saved.minViews, MIN_VIEWS_SLIDER, MAX_MIN_VIEWS_SLIDER))
+        setMaxInscritos(clamp(saved.maxInscritos, MIN_INSCRITOS_SLIDER, MAX_INSCRITOS_SLIDER))
+        setVideosCanalFaixa(normalizarFaixaVideosCanalSalva(saved.videosCanalFaixa))
+        setDias(saved.dias as RecenciaDias)
+      } else {
+        // Migração suave: snapshots antigos não tinham preset e podem estar restritivos.
+        const p = getPresetById(DEFAULT_PRESET_ID)
+        setPresetId(p.id)
+        setMinViews(p.minViews)
+        setMaxInscritos(p.maxInscritos)
+        setDias(p.dias)
+        setVideosCanalFaixa(p.videosCanalFaixa)
+      }
       if (typeof saved.filtersOpen === 'boolean') setFiltersOpen(saved.filtersOpen)
       if (saved.query != null) setQuery(saved.query.slice(0, QUERY_MAX_LEN))
+    } else {
+      const p = getPresetById(DEFAULT_PRESET_ID)
+      setPresetId(p.id)
+      setMinViews(p.minViews)
+      setMaxInscritos(p.maxInscritos)
+      setDias(p.dias)
+      setVideosCanalFaixa(p.videosCanalFaixa)
     }
     setFiltrosHydrated(true)
   }, [])
@@ -125,11 +212,12 @@ function GarimpoPageContent() {
       minViews,
       maxInscritos,
       videosCanalFaixa,
+      presetId,
       dias,
       filtersOpen,
       query: query.slice(0, QUERY_MAX_LEN),
     })
-  }, [filtrosHydrated, minViews, maxInscritos, videosCanalFaixa, dias, filtersOpen, query])
+  }, [filtrosHydrated, minViews, maxInscritos, videosCanalFaixa, presetId, dias, filtersOpen, query])
 
   useEffect(() => {
     if (results.length === 0) return
@@ -153,8 +241,33 @@ function GarimpoPageContent() {
     }
   }, [results])
 
-  function sortByGem(videos: VideoGarimpo[]) {
-    return [...videos].sort((a, b) => b.gemScore.total - a.gemScore.total)
+  function scoreByPreset(v: VideoGarimpo): number {
+    const subs = Math.max(1, v.canal.inscritos || 0)
+    const ratioViewsSubs = v.views / subs
+    if (presetId === 'recent_explosion') return v.viewsPorDia
+    if (presetId === 'asymmetry') return ratioViewsSubs
+    if (presetId === 'small_traction') return ratioViewsSubs * 0.7 + v.viewsPorDia * 0.3
+    if (presetId === 'new_channel_signal') return v.viewsPorDia * 0.6 + ratioViewsSubs * 0.4
+    return v.gemScore.total
+  }
+
+  function sortByPreset(videos: VideoGarimpo[]) {
+    return [...videos].sort((a, b) => {
+      const sa = scoreByPreset(a)
+      const sb = scoreByPreset(b)
+      if (sb !== sa) return sb - sa
+      return b.gemScore.total - a.gemScore.total
+    })
+  }
+
+  function applyPreset(p: GarimpoPreset) {
+    setPresetId(p.id)
+    setMinViews(p.minViews)
+    setMaxInscritos(p.maxInscritos)
+    setDias(p.dias)
+    setVideosCanalFaixa(p.videosCanalFaixa)
+    setFiltersOpen(true)
+    toast.message(`Preset aplicado: ${p.titulo}`)
   }
 
   const maxCanalViewsInList = useMemo(() => {
@@ -184,6 +297,7 @@ function GarimpoPageContent() {
           query: query.trim(),
           minViews,
           maxInscritos,
+          presetId,
           maxVideosCanal: videosCanalApi.maxVideosCanal,
           minVideosCanal: videosCanalApi.minVideosCanal,
           diasPublicacao: dias,
@@ -199,7 +313,7 @@ function GarimpoPageContent() {
         setResults([])
       } else {
         const items = (data.items || []) as VideoGarimpo[]
-        setResults(sortByGem(items))
+        setResults(sortByPreset(items))
         setContinuation(data.continuation ?? null)
         setSeedVideoId(data.seedVideoId ?? null)
         setReferenceChannelId(data.referenceChannelId ?? null)
@@ -226,6 +340,7 @@ function GarimpoPageContent() {
           query: query.trim(),
           minViews,
           maxInscritos,
+          presetId,
           maxVideosCanal: videosCanalApi.maxVideosCanal,
           minVideosCanal: videosCanalApi.minVideosCanal,
           diasPublicacao: dias,
@@ -241,7 +356,7 @@ function GarimpoPageContent() {
         return
       }
       const items = (data.items || []) as VideoGarimpo[]
-      setResults((prev) => sortByGem([...prev, ...items]))
+      setResults((prev) => sortByPreset([...prev, ...items]))
       setContinuation(data.continuation ?? null)
       if (data.seedVideoId != null) setSeedVideoId(data.seedVideoId)
       if (data.referenceChannelId != null) setReferenceChannelId(data.referenceChannelId)
@@ -308,6 +423,24 @@ function GarimpoPageContent() {
 
           {/* ── Search bar ── */}
           <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+              {GARIMPO_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => applyPreset(p)}
+                  className={cn(
+                    'rounded-xl border px-3 py-2.5 text-left transition-colors',
+                    presetId === p.id
+                      ? 'border-[rgba(232,169,58,0.45)] bg-gp-gold/15 text-gp-gold'
+                      : 'border-white/[0.1] bg-gp-bg3/80 text-gp-text2 hover:border-white/[0.18] hover:text-gp-text'
+                  )}
+                >
+                  <span className="block text-xs font-semibold text-gp-text">{p.titulo}</span>
+                  <span className="mt-0.5 block text-[10px] leading-tight opacity-85">{p.subtitulo}</span>
+                </button>
+              ))}
+            </div>
             <div className="flex items-stretch gap-2">
               {/* Search input */}
               <div className="flex h-10 min-h-10 min-w-0 flex-1 items-center gap-2 rounded-full border border-[#303030] bg-[#121212] px-4 shadow-inner transition-colors focus-within:border-[#717171]">
@@ -645,7 +778,7 @@ function VideoCard({
               video.canal.videosPublicados > 0 && (
                 <span className="inline-flex items-center gap-0.5 tabular-nums">
                   <Clapperboard className="h-3 w-3 shrink-0 opacity-80" />
-                  {formatCompact(video.canal.videosPublicados)} vídeos no canal
+                  {formatCompact(video.canal.videosPublicados)} vídeos
                 </span>
               )}
           </div>

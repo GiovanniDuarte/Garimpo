@@ -221,7 +221,7 @@ function GemScorePanelV3({
     },
     {
       key: 'densidade',
-      titulo: 'Densidade de Hits',
+      titulo: 'Densidade de hits & dispersão',
       sinal: sinais.densidadeHits,
       icon: BarChart3,
       iconWrap: 'bg-gp-gold/10 text-gp-gold',
@@ -249,9 +249,21 @@ function GemScorePanelV3({
   const rodapeHints = [
     'autonomia da base',
     'aceleração',
-    'hits acima 100k',
+    'hits ≥100k + dispersão de views',
     'views/dia/vídeo',
   ]
+  const receitaEstimada =
+    contextoCanal?.totalViews &&
+    contextoCanal.totalViews > 0 &&
+    score.nichoBonus?.rpmMedio != null
+      ? (contextoCanal.totalViews / 1000) * score.nichoBonus.rpmMedio
+      : null
+  const receitaMediaPorVideo =
+    receitaEstimada != null &&
+    contextoCanal?.videosNoCanal != null &&
+    contextoCanal.videosNoCanal > 0
+      ? receitaEstimada / contextoCanal.videosNoCanal
+      : null
 
   return (
     <div className="gp-card overflow-hidden shadow-sm">
@@ -364,7 +376,7 @@ function GemScorePanelV3({
             <Sparkles className="h-3.5 w-3.5" />
             Potencial do nicho (referência)
           </p>
-          <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-5">
             <div className="rounded-lg bg-gp-bg4 py-2">
               <p className="text-[10px] text-gp-text3">RPM médio</p>
               <p className="gp-mono-nums text-sm font-medium text-gp-green">
@@ -386,11 +398,14 @@ function GemScorePanelV3({
             <div className="rounded-lg bg-gp-bg3 py-2">
               <p className="text-[10px] text-gp-text3">Receita estimada</p>
               <p className="gp-mono-nums text-sm font-medium text-gp-green">
-                {contextoCanal?.totalViews && contextoCanal.totalViews > 0
-                  ? formatUsdCompact(
-                      (contextoCanal.totalViews / 1000) *
-                        score.nichoBonus.rpmMedio
-                    )
+                {receitaEstimada != null ? formatUsdCompact(receitaEstimada) : '—'}
+              </p>
+            </div>
+            <div className="rounded-lg bg-gp-bg3 py-2">
+              <p className="text-[10px] text-gp-text3">Média por vídeo</p>
+              <p className="gp-mono-nums text-sm font-medium text-gp-green">
+                {receitaMediaPorVideo != null
+                  ? formatUsdCompact(receitaMediaPorVideo)
                   : '—'}
               </p>
             </div>

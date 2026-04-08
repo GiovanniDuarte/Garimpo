@@ -12,6 +12,40 @@ const MAX = {
 
 const HIT_VIEWS = 100_000
 
+/**
+ * Quão “uniformes” são as views na amostra: 1 = repartidas; 0 = tudo no top 1.
+ * Só faz sentido com n ≥ 2 e soma > 0.
+ */
+function multiplicadorDistribuicaoViews(
+  videos: GemScoreVideoInput[],
+  n: number
+): { factor: number; concentracaoTop: number } {
+  if (n < 2) return { factor: 1, concentracaoTop: 0 }
+
+  const views = videos.map((v) => Math.max(0, v.views))
+  const sumViews = views.reduce((s, v) => s + v, 0)
+  if (sumViews <= 0) return { factor: 1, concentracaoTop: 0 }
+
+  const maxV = Math.max(...views)
+  const concentracao = maxV / sumViews
+  const equalShare = 1 / n
+  const maxExcesso = 1 - equalShare
+  const excesso = Math.max(0, concentracao - equalShare)
+  let raw =
+    maxExcesso > 1e-9
+      ? Math.max(0, Math.min(1, 1 - excesso / maxExcesso))
+      : 1
+
+  // Amostras pequenas: penalidade mais suave (poucos vídeos ≠ canal inteiro).
+  if (n === 2) raw = 0.72 + 0.28 * raw
+  else if (n === 3) raw = 0.55 + 0.45 * raw
+
+  return {
+    factor: Math.max(0, Math.min(1, raw)),
+    concentracaoTop: concentracao,
+  }
+}
+
 function pontosBonusMpm(mpmIndice: number | null | undefined): number {
   if (mpmIndice == null || isNaN(mpmIndice)) return 0
   return Math.min(
@@ -162,8 +196,21 @@ function sinalDensidade(
   }
 
   const pct = hits / n
-  const pts = Math.round(pct * MAX.densidadeHits)
+  const ptsBase = Math.round(pct * MAX.densidadeHits)
+  const { factor: multDist, concentracaoTop } = multiplicadorDistribuicaoViews(
+    videos,
+    n
+  )
+  const pts = Math.max(0, Math.round(ptsBase * multDist))
+  const concPct = Math.round(concentracaoTop * 1000) / 10
+
   let resultado = `${hits}/${n} vídeos · ${Math.round(pct * 100)}%`
+  if (n >= 2) {
+    resultado += ` · top 1 vídeo = ${concPct}% das views da amostra`
+    if (multDist < 0.99) {
+      resultado += ` (×${round1(multDist)} na densidade)`
+    }
+  }
   if (pub != null && n < pub) {
     resultado += ` · amostra ${n}/${pub} no canal`
   }
@@ -171,11 +218,13 @@ function sinalDensidade(
     pontos: pts,
     max: MAX.densidadeHits,
     formula:
-      'Vídeos acima de 100k ÷ total · consistência absoluta',
+      'Vídeos ≥100k ÷ total · consistência + repartição de views (penaliza um único viral)',
     resultado,
     hits,
     totalVideos: n,
     pct: Math.round(pct * 1000) / 10,
+    concentracaoTopVideoPct: n >= 2 ? concPct : undefined,
+    multiplicadorDistribuicao: n >= 2 ? multDist : undefined,
   }
 }
 
@@ -220,13 +269,30 @@ export function nichoBonusAPartirDeteccao(nicho: {
 }
 
 function insightV3(sinais: GemScoreSinaisV3): string | undefined {
+  const partes: string[] = []
   if (
     sinais.aceleracao.multiplo < 1 &&
     !sinais.aceleracao.insuficiente
   ) {
-    return 'Aceleração abaixo de 1× — ritmo de views nas publicações recentes não supera as primeiras; canal pode estar estagnado.'
+    partes.push(
+      'Aceleração abaixo de 1× — ritmo de views nas publicações recentes não supera as primeiras; canal pode estar estagnado.'
+    )
   }
-  return undefined
+  const d = sinais.densidadeHits
+  const conc = d.concentracaoTopVideoPct
+  const mult = d.multiplicadorDistribuicao
+  if (
+    conc != null &&
+    conc >= 62 &&
+    mult != null &&
+    mult < 0.58 &&
+    d.totalVideos >= 4
+  ) {
+    partes.push(
+      'Grande parte das views da amostra está num só vídeo — tração difícil de repetir; a densidade foi descontada.'
+    )
+  }
+  return partes.length > 0 ? partes.join(' ') : undefined
 }
 
 /**

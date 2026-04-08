@@ -3,243 +3,10 @@ import {
   parseYouTubeUrl,
   searchYouTubePage,
   getVideoDetails,
-  getChannelInfo,
-  parsePublishedDate,
   getRelatedVideosPage,
-  type SearchResult,
-  type VideoDetails,
 } from '@/lib/scraper/youtube'
-import { parseJoinDateYoutube } from '@/lib/scraper/channel-info'
-import {
-  calcularGemScore,
-  type GemScoreVideoInput,
-} from '@/lib/scoring/gem-score'
+import { enrichSearchResults } from '@/lib/garimpo/enrich-search-results'
 import type { VideoGarimpo } from '@/types'
-
-const CHANNEL_FETCH_CONCURRENCY = 5
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const ret: R[] = new Array(items.length)
-  let nextIndex = 0
-  async function worker() {
-    while (true) {
-      const i = nextIndex++
-      if (i >= items.length) break
-      ret[i] = await fn(items[i]!)
-    }
-  }
-  const n = Math.min(concurrency, Math.max(1, items.length))
-  await Promise.all(Array.from({ length: n }, () => worker()))
-  return ret
-}
-
-async function enrichSearchResults(
-  searchResults: SearchResult[],
-  opts: {
-    minViews: number
-    maxInscritos: number
-    /** Com total conhecido: excluir se videoCount for superior a este máximo. Omitir ou 0 = sem teto. */
-    maxVideosCanal?: number
-    /** Com total conhecido: excluir se videoCount for inferior a este mínimo. Omitir ou 0 = sem piso. */
-    minVideosCanal?: number
-    duracaoMin?: number
-    duracaoMax?: number
-    seenVideoIds: Set<string>
-    /** Em busca por vídeo de referência: não listar outros vídeos do mesmo canal. */
-    excludeChannelId?: string | null
-  },
-  channelTotalViews: Map<string, number>
-): Promise<VideoGarimpo[]> {
-  const filtered = searchResults.filter((s) => {
-    if (!s.videoId || opts.seenVideoIds.has(s.videoId)) return false
-    if (
-      opts.excludeChannelId &&
-      s.channelId &&
-      s.channelId === opts.excludeChannelId
-    ) {
-      return false
-    }
-    if (s.views < opts.minViews) return false
-    if (s.duration > 0 && opts.duracaoMin != null && s.duration < opts.duracaoMin) {
-      return false
-    }
-    if (s.duration > 0 && opts.duracaoMax != null && s.duration > opts.duracaoMax) {
-      return false
-    }
-    return true
-  })
-
-  const enrichedRows = await mapWithConcurrency(filtered, CHANNEL_FETCH_CONCURRENCY, async (s) => {
-    // O browseId vindo do HTML (ex. lockup: avatar) pode não ser o canal do vídeo;
-    // o player devolve o channelId real do upload, alinhado com nome/biblioteca.
-    let resolvedChannelId = s.channelId
-    let videoDetails: VideoDetails | null = null
-    try {
-      videoDetails = await getVideoDetails(s.videoId)
-      if (videoDetails.channelId) resolvedChannelId = videoDetails.channelId
-    } catch {
-      videoDetails = null
-    }
-
-    let subs = 0
-    let channelThumb = ''
-    let totalViews = channelTotalViews.get(resolvedChannelId) ?? 0
-    let videoCount = 0
-    let joinDateStr = ''
-    let channelName = s.channelName
-    let channelUrl = s.channelUrl
-    if (resolvedChannelId) {
-      try {
-        const info = await getChannelInfo(resolvedChannelId)
-        subs = info.subscribers
-        channelThumb = info.avatar
-        totalViews = info.totalViews || 0
-        videoCount = info.videoCount || 0
-        joinDateStr = info.joinDate || ''
-        channelTotalViews.set(resolvedChannelId, totalViews)
-        if (info.name) channelName = info.name
-        if (info.url) channelUrl = info.url
-      } catch {
-        subs = 0
-      }
-    }
-    return {
-      s,
-      videoDetails,
-      subs,
-      channelThumb,
-      totalViews,
-      videoCount,
-      joinDateStr,
-      resolvedChannelId,
-      channelName,
-      channelUrl,
-    }
-  })
-
-  const out: VideoGarimpo[] = []
-
-  for (const row of enrichedRows) {
-    const {
-      s,
-      videoDetails,
-      subs,
-      channelThumb,
-      totalViews,
-      videoCount,
-      joinDateStr,
-      resolvedChannelId,
-      channelName,
-      channelUrl,
-    } = row
-    if (
-      opts.excludeChannelId &&
-      resolvedChannelId &&
-      resolvedChannelId === opts.excludeChannelId
-    ) {
-      continue
-    }
-    if (subs > opts.maxInscritos) continue
-    if (
-      opts.maxVideosCanal != null &&
-      opts.maxVideosCanal > 0 &&
-      videoCount > 0 &&
-      videoCount > opts.maxVideosCanal
-    ) {
-      continue
-    }
-    if (
-      opts.minVideosCanal != null &&
-      opts.minVideosCanal > 0 &&
-      (videoCount === 0 || videoCount < opts.minVideosCanal)
-    ) {
-      continue
-    }
-
-    /** Mesma fonte que `/api/canais` ao guardar: player (evita lista ≠ perfil). */
-    const pubDate =
-      (videoDetails != null &&
-        parsePublishedDate(
-          videoDetails.publishDate || videoDetails.uploadDate || ''
-        )) ||
-      parsePublishedDate(s.publishedText) ||
-      new Date(Date.now() - 86400000)
-    const gemViews = videoDetails != null ? videoDetails.views : s.views
-    const dias = Math.max(1, (Date.now() - pubDate.getTime()) / 86400000)
-    const viewsPorDia = gemViews / dias
-
-    const joinParsed = joinDateStr
-      ? parseJoinDateYoutube(joinDateStr)
-      : undefined
-
-    const idadeCanalDias = joinParsed
-      ? Math.max(1, (Date.now() - joinParsed.getTime()) / 86400000)
-      : Math.max(1, (Date.now() - pubDate.getTime()) / 86400000)
-    const vc = videoCount > 0 ? videoCount : 1
-    const videosGem: GemScoreVideoInput[] = [
-      { views: gemViews, dataPublicacao: pubDate },
-    ]
-
-    const pubYt = videoCount > 0 ? videoCount : null
-
-    const gemScore = calcularGemScore(
-      {
-        inscritos: Math.max(1, subs),
-        videos: videosGem,
-        totalViewsCanal: Math.max(0, totalViews),
-        videoCountCanal: vc,
-        idadeCanalDias,
-        videosPublicadosYoutube: pubYt,
-      },
-      undefined,
-      undefined
-    )
-
-    const titulo =
-      videoDetails != null && videoDetails.title
-        ? videoDetails.title
-        : s.title
-    const thumbRow =
-      videoDetails != null && videoDetails.thumbnailUrl
-        ? videoDetails.thumbnailUrl
-        : s.thumbnailUrl
-    const duracaoSegundos =
-      videoDetails != null && videoDetails.lengthSeconds > 0
-        ? videoDetails.lengthSeconds
-        : s.duration
-
-    out.push({
-      youtubeId: s.videoId,
-      titulo,
-      url: s.url,
-      thumbnailUrl: thumbRow,
-      views: gemViews,
-      dataPublicacao: pubDate.toISOString(),
-      duracaoSegundos,
-      viewsPorDia,
-      canal: {
-        youtubeId: resolvedChannelId,
-        nome: channelName,
-        url:
-          channelUrl ||
-          (resolvedChannelId
-            ? `https://www.youtube.com/channel/${resolvedChannelId}`
-            : s.channelUrl),
-        inscritos: subs,
-        thumbnailUrl: channelThumb,
-        totalViews,
-        ...(pubYt != null ? { videosPublicados: pubYt } : {}),
-      },
-      gemScore,
-    })
-  }
-
-  return out
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -248,6 +15,7 @@ export async function POST(req: NextRequest) {
       query,
       minViews = 15_000,
       maxInscritos = 1_000,
+      presetId = null,
       maxVideosCanal = 0,
       minVideosCanal = 0,
       diasPublicacao = 0,
@@ -261,6 +29,7 @@ export async function POST(req: NextRequest) {
       query: string
       minViews?: number
       maxInscritos?: number
+      presetId?: string | null
       /** `0` ou omitido = sem teto. */
       maxVideosCanal?: number
       /** `0` ou omitido = sem piso (ex.: 101 = só canais com mais de 100 vídeos). */
@@ -272,6 +41,24 @@ export async function POST(req: NextRequest) {
       seedVideoId?: string | null
       seenVideoIds?: string[]
       referenceChannelId?: string | null
+    }
+
+    const sortByPreset = (list: VideoGarimpo[]): VideoGarimpo[] => {
+      const score = (v: VideoGarimpo): number => {
+        const subs = Math.max(1, v.canal.inscritos || 0)
+        const ratio = v.views / subs
+        if (presetId === 'recent_explosion') return v.viewsPorDia
+        if (presetId === 'asymmetry') return ratio
+        if (presetId === 'small_traction') return ratio * 0.7 + v.viewsPorDia * 0.3
+        if (presetId === 'new_channel_signal') return v.viewsPorDia * 0.6 + ratio * 0.4
+        return v.gemScore.total
+      }
+      return [...list].sort((a, b) => {
+        const sa = score(a)
+        const sb = score(b)
+        if (sb !== sa) return sb - sa
+        return b.gemScore.total - a.gemScore.total
+      })
     }
 
     if (!query?.trim() && !seedVideoId) {
@@ -324,7 +111,7 @@ export async function POST(req: NextRequest) {
         { ...filterOpts, excludeChannelId: excludeCh },
         channelTotalViews
       )
-      items.push(...batch)
+      items.push(...sortByPreset(batch))
       nextContinuation = page.continuation
       nextSeed = seedVideoId
       return NextResponse.json({
@@ -354,7 +141,7 @@ export async function POST(req: NextRequest) {
         { ...filterOpts, excludeChannelId: vd.channelId || null },
         channelTotalViews
       )
-      items.push(...relatedBatch)
+      items.push(...sortByPreset(relatedBatch))
       nextContinuation = relatedPage.continuation
 
       return NextResponse.json({
@@ -380,7 +167,7 @@ export async function POST(req: NextRequest) {
       filterOpts,
       channelTotalViews
     )
-    items.push(...batch)
+    items.push(...sortByPreset(batch))
     nextContinuation = searchPage.continuation
     nextSeed = null
 

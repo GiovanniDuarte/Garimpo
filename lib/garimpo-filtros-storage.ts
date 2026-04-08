@@ -7,12 +7,26 @@ import {
 
 const STORAGE_KEY = 'garimpo:filtros-v2'
 const STORAGE_KEY_LEGACY = 'garimpo:filtros-v1'
+const PRESET_IDS = new Set([
+  'small_traction',
+  'recent_explosion',
+  'asymmetry',
+  'new_channel_signal',
+  'balanced_daily',
+] as const)
+export type GarimpoPresetId =
+  | 'small_traction'
+  | 'recent_explosion'
+  | 'asymmetry'
+  | 'new_channel_signal'
+  | 'balanced_daily'
 
 export type GarimpoFiltrosSalvos = {
   minViews: number
   maxInscritos: number
   /** Faixa de tamanho do canal (vídeos públicos). */
   videosCanalFaixa: GarimpoVideosCanalFaixaId
+  presetId?: GarimpoPresetId
   dias: number
   /** Painel de filtros aberto ou fechado */
   filtersOpen?: boolean
@@ -42,6 +56,10 @@ function parseSalvos(raw: string | null): GarimpoFiltrosSalvos | null {
       minViews: p.minViews,
       maxInscritos: p.maxInscritos,
       videosCanalFaixa,
+      presetId:
+        typeof p.presetId === 'string' && PRESET_IDS.has(p.presetId as GarimpoPresetId)
+          ? (p.presetId as GarimpoPresetId)
+          : undefined,
       dias: normalizarDiasRecenciaSalvo(p.dias),
       filtersOpen: typeof p.filtersOpen === 'boolean' ? p.filtersOpen : undefined,
       query: typeof p.query === 'string' ? p.query : undefined,

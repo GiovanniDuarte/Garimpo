@@ -25,6 +25,8 @@ import {
   Eye,
   Link2,
   Plus,
+  Star,
+  Pickaxe,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -34,6 +36,7 @@ import {
   salvarFiltrosBiblioteca,
 } from '@/lib/biblioteca-filtros-storage'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { tagsIncluemMineirador } from '@/lib/canais/tags-mineirador'
 
 const BIB_SEARCH_MAX = 200
 
@@ -53,6 +56,7 @@ const BIB_ORDER_LABEL: Record<string, string> = {
   inscritos: 'Inscritos',
   nome: 'Nome',
   totalViews: 'Views totais',
+  receitaMediaPorVideo: 'Receita / vídeo',
 }
 
 interface CanalListItem {
@@ -68,9 +72,13 @@ interface CanalListItem {
   gemScoreDetalhado: string | null
   status: string
   nichoInferido: string | null
+  favorito?: boolean
   criadoEm: string
   _count: { videos: number; projetos: number }
   potencialModelagem?: PotencialModelagem
+  receitaEstimada?: number | null
+  receitaMediaPorVideo?: number | null
+  tags?: string | null
 }
 
 export default function BibliotecaPage() {
@@ -87,6 +95,7 @@ export default function BibliotecaPage() {
     id: string
     nome: string
   } | null>(null)
+  const [favoritoBusyId, setFavoritoBusyId] = useState<string | null>(null)
 
   useEffect(() => {
     const s = lerFiltrosBiblioteca()
@@ -127,6 +136,44 @@ export default function BibliotecaPage() {
     e.preventDefault()
     e.stopPropagation()
     setDeleteTarget({ id, nome })
+  }
+
+  async function handleToggleFavorito(
+    canal: CanalListItem,
+    e: React.MouseEvent
+  ) {
+    e.preventDefault()
+    e.stopPropagation()
+    const next = !canal.favorito
+    setFavoritoBusyId(canal.id)
+    try {
+      const res = await fetch(`/api/canais/${canal.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ favorito: next }),
+      })
+      if (!res.ok) {
+        toast.error('Não foi possível atualizar favorito.')
+        return
+      }
+      if (next) {
+        await fetchCanais()
+        toast.success(
+          `«${canal.nome}» nos favoritos — dados do canal atualizados a partir do YouTube.`
+        )
+      } else {
+        setCanais((prev) =>
+          prev.map((c) =>
+            c.id === canal.id ? { ...c, favorito: false } : c
+          )
+        )
+        toast.success(`«${canal.nome}» removido dos favoritos`)
+      }
+    } catch {
+      toast.error('Erro de rede.')
+    } finally {
+      setFavoritoBusyId(null)
+    }
   }
 
   async function handleRefreshChannel(id: string, e: React.MouseEvent) {
@@ -300,6 +347,7 @@ export default function BibliotecaPage() {
               <SelectContent>
                 <SelectItem value="criadoEm">Data adicionado</SelectItem>
                 <SelectItem value="gemScore">Gem Score</SelectItem>
+                <SelectItem value="receitaMediaPorVideo">Receita / vídeo</SelectItem>
                 <SelectItem value="totalViews">Views totais</SelectItem>
                 <SelectItem value="inscritos">Inscritos</SelectItem>
                 <SelectItem value="nome">Nome</SelectItem>
@@ -339,6 +387,7 @@ export default function BibliotecaPage() {
                   }
                 }
                 const isRefreshing = refreshingId === canal.id
+                const favoritoBusy = favoritoBusyId === canal.id
                 const totalV = canal.totalViews ?? 0
                 const viewsBarPct =
                   maxTotalViewsList > 0
@@ -379,6 +428,14 @@ export default function BibliotecaPage() {
 
                       <div className="min-w-0 flex-1 space-y-1.5">
                         <div className="flex flex-wrap items-center gap-2">
+                          {tagsIncluemMineirador(canal.tags) ? (
+                            <span
+                              title="Mineirador — canal capturado pela ferramenta de mineração"
+                              className="flex shrink-0 items-center text-gp-gold"
+                            >
+                              <Pickaxe className="size-3.5" aria-hidden />
+                            </span>
+                          ) : null}
                           <h3 className="truncate text-sm font-semibold text-white group-hover:text-primary">
                             {canal.nome}
                           </h3>
@@ -404,6 +461,12 @@ export default function BibliotecaPage() {
                                 canal
                               </span>
                             )}
+                          {canal.receitaMediaPorVideo != null &&
+                            canal.receitaMediaPorVideo > 0 && (
+                              <span className="rounded bg-gp-gold/10 px-1.5 py-0.5 text-[11px] text-gp-gold">
+                                {formatUsdShort(canal.receitaMediaPorVideo)}/vídeo
+                              </span>
+                            )}
                         </div>
                         <div
                           className="h-0.5 w-full overflow-hidden rounded-sm bg-gp-bg4"
@@ -420,6 +483,24 @@ export default function BibliotecaPage() {
                     <div className="flex shrink-0 items-center gap-3">
                       {gemScoreData && <GemScoreBadge score={gemScoreData} size="md" />}
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => void handleToggleFavorito(canal, e)}
+                          disabled={favoritoBusy}
+                          className="rounded-full p-2 text-[#717171] transition-colors hover:bg-[#272727] hover:text-gp-gold disabled:opacity-40"
+                          title={
+                            canal.favorito
+                              ? 'Remover dos favoritos'
+                              : 'Adicionar aos favoritos'
+                          }
+                        >
+                          {favoritoBusy ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Star
+                              className={`h-4 w-4 ${canal.favorito ? 'fill-gp-gold text-gp-gold' : ''}`}
+                            />
+                          )}
+                        </button>
                         <button
                           onClick={(e) => handleRefreshChannel(canal.id, e)}
                           disabled={isRefreshing}
@@ -495,4 +576,10 @@ function formatNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return n.toString()
+}
+
+function formatUsdShort(n: number): string {
+  if (n >= 1_000_000) return `US$ ${(n / 1_000_000).toFixed(1).replace('.', ',')} mi`
+  if (n >= 1_000) return `US$ ${(n / 1_000).toFixed(1).replace('.', ',')} mil`
+  return `US$ ${Math.round(n).toLocaleString('pt-BR')}`
 }

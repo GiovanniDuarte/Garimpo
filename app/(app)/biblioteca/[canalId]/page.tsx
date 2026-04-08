@@ -28,8 +28,10 @@ import {
   Download,
   AlertCircle,
   Crosshair,
+  Pickaxe,
   RefreshCw,
   Copy,
+  Star,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
@@ -42,6 +44,7 @@ import {
   calcularIdadeCanal,
   resolverDataReferenciaIdadeCanal,
 } from '@/lib/scraper/channel-info'
+import { tagsIncluemMineirador } from '@/lib/canais/tags-mineirador'
 
 interface CanalData {
   id: string
@@ -74,6 +77,8 @@ interface CanalData {
   }>
   mochilaAt: string | null
   mochilaVideoCount: number | null
+  favorito?: boolean
+  tags?: string | null
 }
 
 export default function CanalDetailPage({
@@ -92,6 +97,7 @@ export default function CanalDetailPage({
   const [mochilaN, setMochilaN] = useState<7 | 15 | 25>(7)
   const [mochilaBusy, setMochilaBusy] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [favoritoBusy, setFavoritoBusy] = useState(false)
 
   useEffect(() => {
     fetchCanal()
@@ -118,6 +124,37 @@ export default function CanalDetailPage({
     })
     setCanal((c) => (c ? { ...c, status } : c))
     toast.success('Status atualizado')
+  }
+
+  async function handleToggleFavorito() {
+    if (!canal) return
+    const next = !canal.favorito
+    setFavoritoBusy(true)
+    try {
+      const res = await fetch(`/api/canais/${canalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ favorito: next }),
+      })
+      if (!res.ok) {
+        toast.error('Não foi possível atualizar favorito.')
+        return
+      }
+      if (next) {
+        toast.message('A atualizar dados do canal a partir do YouTube…')
+        await fetchCanal()
+        toast.success(
+          `${canal.nome} · nos favoritos (perfil atualizado)`
+        )
+      } else {
+        setCanal((c) => (c ? { ...c, favorito: false } : c))
+        toast.success(`${canal.nome} · removido dos favoritos`)
+      }
+    } catch {
+      toast.error('Erro de rede.')
+    } finally {
+      setFavoritoBusy(false)
+    }
   }
 
   async function handleSaveNicho() {
@@ -323,6 +360,26 @@ export default function CanalDetailPage({
             </Select>
             <button
               type="button"
+              onClick={() => void handleToggleFavorito()}
+              disabled={favoritoBusy}
+              className="flex items-center gap-1.5 rounded-lg border border-white/[0.12] bg-gp-bg3 px-3 py-1.5 text-xs font-semibold text-gp-text2 transition-colors hover:border-gp-gold/35 hover:text-gp-gold disabled:pointer-events-none disabled:opacity-50"
+              title={
+                canal.favorito
+                  ? 'Remover dos favoritos'
+                  : 'Guardar em Favoritos'
+              }
+            >
+              {favoritoBusy ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+              ) : (
+                <Star
+                  className={`h-4 w-4 shrink-0 ${canal.favorito ? 'fill-gp-gold text-gp-gold' : ''}`}
+                />
+              )}
+              <span className="hidden sm:inline">Favorito</span>
+            </button>
+            <button
+              type="button"
               onClick={() => void handleRefreshPerfil()}
               disabled={refreshing}
               className="flex items-center gap-1.5 rounded-lg border border-white/[0.12] bg-gp-bg3 px-3 py-1.5 text-xs font-semibold text-gp-text2 transition-colors hover:border-gp-gold/30 hover:text-gp-gold disabled:pointer-events-none disabled:opacity-50"
@@ -382,6 +439,14 @@ export default function CanalDetailPage({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="mb-1 flex flex-wrap items-center gap-2">
+                  {tagsIncluemMineirador(canal.tags) ? (
+                    <span
+                      title="Mineirador — canal capturado pela ferramenta de mineração"
+                      className="flex shrink-0 items-center text-gp-gold"
+                    >
+                      <Pickaxe className="size-4" aria-hidden />
+                    </span>
+                  ) : null}
                   <h1 className="font-heading text-xl font-bold leading-tight tracking-wide text-gp-text">
                     {canal.nome}
                   </h1>

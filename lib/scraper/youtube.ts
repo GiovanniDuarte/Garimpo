@@ -205,6 +205,49 @@ export async function searchYouTube(
   return page.results
 }
 
+/** Categoria do formulário de upload (ID → rótulo EN). */
+const YOUTUBE_CATEGORY_ID_LABEL: Record<string, string> = {
+  '1': 'Film & Animation',
+  '2': 'Autos & Vehicles',
+  '10': 'Music',
+  '15': 'Pets & Animals',
+  '17': 'Sports',
+  '19': 'Travel & Events',
+  '20': 'Gaming',
+  '22': 'People & Blogs',
+  '23': 'Comedy',
+  '24': 'Entertainment',
+  '25': 'News & Politics',
+  '26': 'Howto & Style',
+  '27': 'Education',
+  '28': 'Science & Technology',
+  '29': 'Nonprofits & Activism',
+}
+
+function categoryLabelFromPlayerData(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vd: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  micro: any
+): string {
+  const raw =
+    (typeof vd?.category === 'string' && vd.category.trim() && vd.category) ||
+    (typeof micro?.category === 'string' && micro.category.trim() && micro.category) ||
+    ''
+  if (raw && !/^\d+$/.test(raw)) return raw.trim()
+
+  const idRaw =
+    vd?.categoryId != null
+      ? String(vd.categoryId).trim()
+      : raw && /^\d+$/.test(raw)
+        ? raw
+        : ''
+  if (idRaw && YOUTUBE_CATEGORY_ID_LABEL[idRaw]) {
+    return YOUTUBE_CATEGORY_ID_LABEL[idRaw]
+  }
+  return ''
+}
+
 export async function getVideoDetails(videoId: string): Promise<VideoDetails> {
   const res = await fetch(`${INNERTUBE_BASE}/player?key=${INNERTUBE_API_KEY}`, {
     method: 'POST',
@@ -242,6 +285,8 @@ export async function getVideoDetails(videoId: string): Promise<VideoDetails> {
     vd?.publishDate ||
     ''
 
+  const category = categoryLabelFromPlayerData(vd, micro)
+
   return {
     videoId,
     title,
@@ -254,6 +299,7 @@ export async function getVideoDetails(videoId: string): Promise<VideoDetails> {
     thumbnailUrl: thumb,
     publishDate: String(publishDate),
     uploadDate: String(micro?.uploadDate || ''),
+    category,
   }
 }
 
@@ -1062,6 +1108,8 @@ export interface VideoDetails {
   thumbnailUrl: string
   publishDate: string
   uploadDate: string
+  /** Rótulo EN da categoria do vídeo (ex.: News & Politics), quando o player expõe. */
+  category: string
 }
 
 export interface ChannelInfo {

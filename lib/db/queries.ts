@@ -6,6 +6,7 @@ export async function listarCanais(filtros?: {
   status?: CanalStatus
   categoria?: string
   tag?: string
+  favorito?: boolean
   orderBy?: 'criadoEm' | 'gemScore' | 'inscritos' | 'nome' | 'totalViews'
   orderDir?: 'asc' | 'desc'
 }) {
@@ -16,6 +17,9 @@ export async function listarCanais(filtros?: {
   }
   if (filtros?.tag) {
     where.tags = { contains: filtros.tag }
+  }
+  if (typeof filtros?.favorito === 'boolean') {
+    where.favorito = filtros.favorito
   }
 
   const orderBy: Record<string, string> = {}
@@ -81,6 +85,9 @@ export async function criarCanal(data: {
   thumbnailUrl?: string
   avatarLocal?: string
   pais?: string
+  status?: string
+  tags?: string
+  favorito?: boolean
 }) {
   return prisma.canal.create({ data })
 }
@@ -89,6 +96,7 @@ export async function atualizarCanal(
   id: string,
   data: Partial<{
     nome: string
+    url: string
     inscritos: number
     totalViews: number
     videosPublicados: number
@@ -109,6 +117,7 @@ export async function atualizarCanal(
     pais: string
     mochilaAt: Date
     mochilaVideoCount: number
+    favorito: boolean
   }>
 ) {
   return prisma.canal.update({ where: { id }, data })

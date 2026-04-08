@@ -40,6 +40,7 @@ function fallbackDetails(v: VideoMochilaInput): VideoDetails {
     thumbnailUrl: '',
     publishDate: '',
     uploadDate: '',
+    category: '',
   }
 }
 
