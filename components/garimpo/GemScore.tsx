@@ -364,7 +364,7 @@ function GemScorePanelV3({
             <Sparkles className="h-3.5 w-3.5" />
             Potencial do nicho (referência)
           </p>
-          <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
             <div className="rounded-lg bg-gp-bg4 py-2">
               <p className="text-[10px] text-gp-text3">RPM médio</p>
               <p className="gp-mono-nums text-sm font-medium text-gp-green">
@@ -381,6 +381,17 @@ function GemScorePanelV3({
               <p className="text-[10px] text-gp-text3">Equilíbrio</p>
               <p className="gp-mono-nums text-sm font-medium text-gp-gold">
                 {score.nichoBonus.potencialOuro}/10
+              </p>
+            </div>
+            <div className="rounded-lg bg-gp-bg3 py-2">
+              <p className="text-[10px] text-gp-text3">Receita estimada</p>
+              <p className="gp-mono-nums text-sm font-medium text-gp-green">
+                {contextoCanal?.totalViews && contextoCanal.totalViews > 0
+                  ? formatUsdCompact(
+                      (contextoCanal.totalViews / 1000) *
+                        score.nichoBonus.rpmMedio
+                    )
+                  : '—'}
               </p>
             </div>
           </div>
@@ -695,4 +706,14 @@ function formatCompact(n: number): string {
     return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`
   return n.toLocaleString('pt-BR')
+}
+
+function formatUsdCompact(n: number): string {
+  if (n >= 1_000_000) {
+    return `US$ ${(n / 1_000_000).toFixed(1).replace('.', ',')} mi`
+  }
+  if (n >= 1_000) {
+    return `US$ ${(n / 1_000).toFixed(1).replace('.', ',')} mil`
+  }
+  return `US$ ${Math.round(n).toLocaleString('pt-BR')}`
 }

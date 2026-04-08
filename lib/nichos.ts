@@ -563,6 +563,45 @@ function pontuarSubnicho(blob: string, sub: SubNicho): number {
 
 const SCORE_MINIMO_DETECCAO = 2
 
+export type AmostraNichoVideo = {
+  titulo: string
+  tags?: string[]
+}
+
+function pesoKeyword(kwNorm: string): number {
+  if (kwNorm.length >= 12) return 5
+  if (kwNorm.length >= 8) return 4
+  if (kwNorm.length >= 5) return 3
+  return 2
+}
+
+function pontuarSubnichoPorTopVideos(
+  videos: AmostraNichoVideo[],
+  sub: SubNicho
+): number {
+  if (videos.length === 0) return 0
+  const kws = sub.palavrasChave
+    .map((kw) => normalizarParaMatch(kw).trim())
+    .filter((kw) => kw.length >= 2)
+  if (kws.length === 0) return 0
+
+  let score = 0
+  for (const v of videos) {
+    const titulo = normalizarParaMatch(v.titulo || '')
+    const tagsNorm = (v.tags || [])
+      .map((t) => normalizarParaMatch(t))
+      .filter(Boolean)
+    for (const kw of kws) {
+      const base = pesoKeyword(kw)
+      const hitTitulo = titulo.includes(kw)
+      const hitTag = tagsNorm.some((t) => t === kw || t.includes(kw) || kw.includes(t))
+      if (hitTitulo) score += base * 2
+      if (hitTag) score += base * 3
+    }
+  }
+  return score
+}
+
 /**
  * Classifica o canal pela descrição + títulos (amostra), com pontuação por keywords.
  */
@@ -578,6 +617,30 @@ export function detectarNicho(
   for (const n of NICHOS) {
     for (const s of n.subNichos) {
       const score = pontuarSubnicho(blob, s)
+      if (score < SCORE_MINIMO_DETECCAO) continue
+      if (!melhor || score > melhor.score) {
+        melhor = { nicho: n.nome, subNicho: s.nome, score }
+      }
+    }
+  }
+
+  return melhor ? { nicho: melhor.nicho, subNicho: melhor.subNicho } : null
+}
+
+/**
+ * Classifica por títulos + tags dos vídeos mais vistos (ideal: top 5).
+ * A descrição do canal é deliberadamente ignorada para reduzir ruído.
+ */
+export function detectarNichoTopVideos(
+  videos: AmostraNichoVideo[]
+): { nicho: string; subNicho: string } | null {
+  if (!videos.length) return null
+  const top = videos.slice(0, 5)
+  let melhor: { nicho: string; subNicho: string; score: number } | null = null
+
+  for (const n of NICHOS) {
+    for (const s of n.subNichos) {
+      const score = pontuarSubnichoPorTopVideos(top, s)
       if (score < SCORE_MINIMO_DETECCAO) continue
       if (!melhor || score > melhor.score) {
         melhor = { nicho: n.nome, subNicho: s.nome, score }
@@ -607,6 +670,35 @@ export function rpmENichoDoRotulo(
 
   return {
     rpmMedio: (sub.rpmEstimado.min + sub.rpmEstimado.max) / 2,
+    viralidade: sub.viralidade,
+  }
+}
+
+export function infoNichoDoRotulo(
+  rotulo: string | null | undefined
+): {
+  rpmMin: number
+  rpmMax: number
+  rpmMedio: number
+  viralidade: number
+} | null {
+  if (!rotulo?.trim()) return null
+  const idx = rotulo.indexOf('>')
+  if (idx === -1) return null
+  const parentNome = rotulo.slice(0, idx).trim()
+  const subNome = rotulo.slice(idx + 1).trim()
+  if (!parentNome || !subNome) return null
+
+  const parent = NICHOS.find((n) => n.nome === parentNome)
+  const sub = parent?.subNichos.find((s) => s.nome === subNome)
+  if (!sub) return null
+
+  const rpmMin = sub.rpmEstimado.min
+  const rpmMax = sub.rpmEstimado.max
+  return {
+    rpmMin,
+    rpmMax,
+    rpmMedio: (rpmMin + rpmMax) / 2,
     viralidade: sub.viralidade,
   }
 }

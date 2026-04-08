@@ -7,6 +7,7 @@ import {
   parsePublishedDate,
   getRelatedVideosPage,
   type SearchResult,
+  type VideoDetails,
 } from '@/lib/scraper/youtube'
 import { parseJoinDateYoutube } from '@/lib/scraper/channel-info'
 import {
@@ -41,6 +42,10 @@ async function enrichSearchResults(
   opts: {
     minViews: number
     maxInscritos: number
+    /** Com total conhecido: excluir se videoCount for superior a este máximo. Omitir ou 0 = sem teto. */
+    maxVideosCanal?: number
+    /** Com total conhecido: excluir se videoCount for inferior a este mínimo. Omitir ou 0 = sem piso. */
+    minVideosCanal?: number
     duracaoMin?: number
     duracaoMax?: number
     seenVideoIds: Set<string>
@@ -72,11 +77,12 @@ async function enrichSearchResults(
     // O browseId vindo do HTML (ex. lockup: avatar) pode não ser o canal do vídeo;
     // o player devolve o channelId real do upload, alinhado com nome/biblioteca.
     let resolvedChannelId = s.channelId
+    let videoDetails: VideoDetails | null = null
     try {
-      const details = await getVideoDetails(s.videoId)
-      if (details.channelId) resolvedChannelId = details.channelId
+      videoDetails = await getVideoDetails(s.videoId)
+      if (videoDetails.channelId) resolvedChannelId = videoDetails.channelId
     } catch {
-      // mantém s.channelId
+      videoDetails = null
     }
 
     let subs = 0
@@ -103,6 +109,7 @@ async function enrichSearchResults(
     }
     return {
       s,
+      videoDetails,
       subs,
       channelThumb,
       totalViews,
@@ -119,6 +126,7 @@ async function enrichSearchResults(
   for (const row of enrichedRows) {
     const {
       s,
+      videoDetails,
       subs,
       channelThumb,
       totalViews,
@@ -136,11 +144,33 @@ async function enrichSearchResults(
       continue
     }
     if (subs > opts.maxInscritos) continue
+    if (
+      opts.maxVideosCanal != null &&
+      opts.maxVideosCanal > 0 &&
+      videoCount > 0 &&
+      videoCount > opts.maxVideosCanal
+    ) {
+      continue
+    }
+    if (
+      opts.minVideosCanal != null &&
+      opts.minVideosCanal > 0 &&
+      (videoCount === 0 || videoCount < opts.minVideosCanal)
+    ) {
+      continue
+    }
 
+    /** Mesma fonte que `/api/canais` ao guardar: player (evita lista ≠ perfil). */
     const pubDate =
-      parsePublishedDate(s.publishedText) || new Date(Date.now() - 86400000)
+      (videoDetails != null &&
+        parsePublishedDate(
+          videoDetails.publishDate || videoDetails.uploadDate || ''
+        )) ||
+      parsePublishedDate(s.publishedText) ||
+      new Date(Date.now() - 86400000)
+    const gemViews = videoDetails != null ? videoDetails.views : s.views
     const dias = Math.max(1, (Date.now() - pubDate.getTime()) / 86400000)
-    const viewsPorDia = s.views / dias
+    const viewsPorDia = gemViews / dias
 
     const joinParsed = joinDateStr
       ? parseJoinDateYoutube(joinDateStr)
@@ -151,7 +181,7 @@ async function enrichSearchResults(
       : Math.max(1, (Date.now() - pubDate.getTime()) / 86400000)
     const vc = videoCount > 0 ? videoCount : 1
     const videosGem: GemScoreVideoInput[] = [
-      { views: s.views, dataPublicacao: pubDate },
+      { views: gemViews, dataPublicacao: pubDate },
     ]
 
     const pubYt = videoCount > 0 ? videoCount : null
@@ -169,14 +199,27 @@ async function enrichSearchResults(
       undefined
     )
 
+    const titulo =
+      videoDetails != null && videoDetails.title
+        ? videoDetails.title
+        : s.title
+    const thumbRow =
+      videoDetails != null && videoDetails.thumbnailUrl
+        ? videoDetails.thumbnailUrl
+        : s.thumbnailUrl
+    const duracaoSegundos =
+      videoDetails != null && videoDetails.lengthSeconds > 0
+        ? videoDetails.lengthSeconds
+        : s.duration
+
     out.push({
       youtubeId: s.videoId,
-      titulo: s.title,
+      titulo,
       url: s.url,
-      thumbnailUrl: s.thumbnailUrl,
-      views: s.views,
+      thumbnailUrl: thumbRow,
+      views: gemViews,
       dataPublicacao: pubDate.toISOString(),
-      duracaoSegundos: s.duration,
+      duracaoSegundos,
       viewsPorDia,
       canal: {
         youtubeId: resolvedChannelId,
@@ -205,6 +248,8 @@ export async function POST(req: NextRequest) {
       query,
       minViews = 15_000,
       maxInscritos = 1_000,
+      maxVideosCanal = 0,
+      minVideosCanal = 0,
       diasPublicacao = 0,
       duracaoMin,
       duracaoMax,
@@ -216,6 +261,10 @@ export async function POST(req: NextRequest) {
       query: string
       minViews?: number
       maxInscritos?: number
+      /** `0` ou omitido = sem teto. */
+      maxVideosCanal?: number
+      /** `0` ou omitido = sem piso (ex.: 101 = só canais com mais de 100 vídeos). */
+      minVideosCanal?: number
       diasPublicacao?: number
       duracaoMin?: number
       duracaoMax?: number
@@ -237,6 +286,14 @@ export async function POST(req: NextRequest) {
     const filterOpts = {
       minViews,
       maxInscritos,
+      maxVideosCanal:
+        typeof maxVideosCanal === 'number' && maxVideosCanal > 0
+          ? maxVideosCanal
+          : undefined,
+      minVideosCanal:
+        typeof minVideosCanal === 'number' && minVideosCanal > 0
+          ? Math.floor(minVideosCanal)
+          : undefined,
       duracaoMin,
       duracaoMax,
       seenVideoIds: displaySeen,

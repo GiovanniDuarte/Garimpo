@@ -204,6 +204,21 @@ function sinalPressao(
   }
 }
 
+/** Metadados para o painel — o RPM **não** entra no total do Gem. */
+export function nichoBonusAPartirDeteccao(nicho: {
+  rpmMedio: number
+  viralidade: number
+}): NonNullable<GemScoreDetalhado['nichoBonus']> {
+  const rpmNorm = Math.min(10, (nicho.rpmMedio / 40) * 10)
+  const potencialOuro =
+    Math.round(Math.sqrt(rpmNorm * nicho.viralidade) * 10) / 10
+  return {
+    rpmMedio: Math.round(nicho.rpmMedio * 10) / 10,
+    viralidade: nicho.viralidade,
+    potencialOuro,
+  }
+}
+
 function insightV3(sinais: GemScoreSinaisV3): string | undefined {
   if (
     sinais.aceleracao.multiplo < 1 &&
@@ -304,14 +319,7 @@ export function calcularGemScore(
   }
 
   if (nicho) {
-    const rpmNorm = Math.min(10, (nicho.rpmMedio / 40) * 10)
-    const potencialOuro =
-      Math.round(Math.sqrt(rpmNorm * nicho.viralidade) * 10) / 10
-    result.nichoBonus = {
-      rpmMedio: Math.round(nicho.rpmMedio * 10) / 10,
-      viralidade: nicho.viralidade,
-      potencialOuro,
-    }
+    result.nichoBonus = nichoBonusAPartirDeteccao(nicho)
   }
 
   return result

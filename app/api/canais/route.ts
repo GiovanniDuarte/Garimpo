@@ -9,7 +9,9 @@ import {
   getChannelInfo,
   getChannelVideos,
   getVideoDetails,
+  parseYouTubeUrl,
   parsePublishedDate,
+  type ChannelVideo,
 } from '@/lib/scraper/youtube'
 import {
   calcularFrequencia,
@@ -17,7 +19,11 @@ import {
   resolverDataReferenciaIdadeCanal,
 } from '@/lib/scraper/channel-info'
 import { calcularGemScore } from '@/lib/scoring/gem-score'
-import { detectarNicho, rpmENichoDoRotulo } from '@/lib/nichos'
+import {
+  detectarNichoTopVideos,
+  rpmENichoDoRotulo,
+  type AmostraNichoVideo,
+} from '@/lib/nichos'
 import { getCanalAvatarCached, clearCanalAvatarFiles } from '@/lib/canal-avatar-cache'
 import { calcularPotencialModelagem } from '@/lib/scoring/potencial-modelagem'
 import type { CanalStatus } from '@/types'
@@ -76,15 +82,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+    const resolvedYoutubeId =
+      (typeof body.youtubeId === 'string' && body.youtubeId.trim()) ||
+      (await resolveYoutubeChannelIdFromInput(
+        typeof body.url === 'string' ? body.url : undefined
+      ))
 
-    if (!body.youtubeId) {
+    if (!resolvedYoutubeId) {
       return NextResponse.json(
-        { error: 'Canal sem identificação (youtubeId). Não é possível salvar.' },
+        {
+          error:
+            'Não consegui identificar o canal. Envie um youtubeId ou uma URL válida de canal/vídeo do YouTube.',
+        },
         { status: 400 }
       )
     }
 
-    const enrichedData = await enrichChannelData(body)
+    const enrichedData = await enrichChannelData({
+      ...body,
+      youtubeId: resolvedYoutubeId,
+    })
     const { videoId: _vid, ...canalData } = enrichedData
     const canal = await criarCanal(canalData as Parameters<typeof criarCanal>[0])
 
@@ -126,6 +143,66 @@ export async function POST(req: NextRequest) {
   }
 }
 
+async function resolveYoutubeChannelIdFromInput(
+  input?: string
+): Promise<string | null> {
+  const raw = input?.trim()
+  if (!raw) return null
+  if (/^UC[\w-]{20,}$/.test(raw)) return raw
+
+  const parsed = parseYouTubeUrl(raw)
+  if (parsed.type === 'video' && parsed.id) {
+    try {
+      const vd = await getVideoDetails(parsed.id)
+      if (vd.channelId) return vd.channelId
+    } catch {
+      return null
+    }
+    return null
+  }
+
+  if (parsed.type === 'channel' && parsed.id) {
+    if (/^UC[\w-]{20,}$/.test(parsed.id)) return parsed.id
+    const byUrl = await resolveChannelIdFromPage(raw)
+    if (byUrl) return byUrl
+
+    const asHandle = parsed.id.startsWith('@') ? parsed.id : `@${parsed.id}`
+    try {
+      const info = await getChannelInfo(asHandle)
+      if (info.channelId) return info.channelId
+    } catch {
+      // ignore
+    }
+    return null
+  }
+
+  if (raw.startsWith('@')) {
+    try {
+      const info = await getChannelInfo(raw)
+      if (info.channelId) return info.channelId
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
+async function resolveChannelIdFromPage(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      redirect: 'follow',
+    })
+    if (!res.ok) return null
+    const html = await res.text()
+    const match = html.match(/"browseId":"(UC[^"]+)"/)
+    return match?.[1] || null
+  } catch {
+    return null
+  }
+}
+
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json()
@@ -148,6 +225,12 @@ export async function PUT(req: NextRequest) {
       )
     }
 
+    const refVideo = await prisma.video.findFirst({
+      where: { canalId: id },
+      orderBy: { views: 'desc' },
+      select: { youtubeId: true },
+    })
+
     const enrichedData = await enrichChannelData(
       {
         youtubeId: existing.youtubeId,
@@ -155,6 +238,7 @@ export async function PUT(req: NextRequest) {
         url: existing.url,
         inscritos: existing.inscritos ?? undefined,
         thumbnailUrl: existing.thumbnailUrl ?? undefined,
+        videoId: refVideo?.youtubeId,
       },
       {
         dataCriacaoCanal: existing.dataCriacaoCanal,
@@ -307,8 +391,10 @@ async function enrichChannelData(
 
     const videos = await getChannelVideos(channelId, 20)
 
+    let parsedVideos: Array<ChannelVideo & { pubDate?: Date | null }> = []
+
     if (videos.length > 0) {
-      const parsedVideos = videos.map((v) => {
+      parsedVideos = videos.map((v) => {
         const pubDate = parsePublishedDate(v.publishedText)
         return { ...v, pubDate }
       })
@@ -327,24 +413,92 @@ async function enrichChannelData(
         )[0]
       }
 
+      const top5PorViews = [...parsedVideos]
+        .filter((v) => v.views > 0)
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 5)
+      const amostraNicho: AmostraNichoVideo[] = await Promise.all(
+        top5PorViews.map(async (v) => {
+          try {
+            const vd = await getVideoDetails(v.videoId)
+            return {
+              titulo: v.title || vd.title || '',
+              tags: Array.isArray(vd.keywords) ? vd.keywords : [],
+            }
+          } catch {
+            return { titulo: v.title || '', tags: [] }
+          }
+        })
+      )
+      const nichoResult = detectarNichoTopVideos(amostraNicho)
+      if (nichoResult) {
+        enrichedData.nichoInferido = `${nichoResult.nicho} > ${nichoResult.subNicho}`
+      }
+    }
+
+    /** Mesma lógica que `enrichSearchResults` no garimpo — evita salvar outro total do que o utilizador viu. */
+    let gemAlinhadoAoGarimpo = false
+    if (body.videoId) {
+      try {
+        const vd = await getVideoDetails(body.videoId)
+        const pubDate =
+          parsePublishedDate(vd.publishDate || vd.uploadDate || '') ||
+          new Date(Date.now() - 86400000)
+        const joinParsed = info.joinDate
+          ? parseJoinDateYoutube(info.joinDate)
+          : undefined
+        const idadeCanalDias = joinParsed
+          ? Math.max(
+              1,
+              (Date.now() - joinParsed.getTime()) / 86400000
+            )
+          : Math.max(
+              1,
+              (Date.now() - pubDate.getTime()) / 86400000
+            )
+        const videoCount = info.videoCount || 0
+        const vc = videoCount > 0 ? videoCount : 1
+        const pubYt = videoCount > 0 ? videoCount : null
+        const subs = enrichedData.inscritos || 0
+        const nichoDataGarimpo =
+          rpmENichoDoRotulo(enrichedData.nichoInferido) ??
+          rpmENichoDoRotulo(existing?.nichoInferido) ??
+          undefined
+        const gemScore = calcularGemScore(
+          {
+            inscritos: Math.max(1, subs || 1),
+            videos: [{ views: vd.views, dataPublicacao: pubDate }],
+            totalViewsCanal: Math.max(0, info.totalViews || 0),
+            videoCountCanal: vc,
+            idadeCanalDias,
+            videosPublicadosYoutube: pubYt,
+          },
+          nichoDataGarimpo,
+          undefined
+        )
+        enrichedData.gemScore = gemScore.total
+        enrichedData.gemScoreDetalhado = JSON.stringify(gemScore)
+        gemAlinhadoAoGarimpo = true
+      } catch {
+        // fallback: cálculo com amostra de vídeos (ex.: GET do vídeo falhou)
+      }
+    }
+
+    if (!gemAlinhadoAoGarimpo && videos.length > 0) {
       const subs = enrichedData.inscritos || 0
       const topVideos = parsedVideos
         .filter((v) => v.views > 0)
         .sort((a, b) => b.views - a.views)
 
-      const nichoResult = detectarNicho(
-        enrichedData.descricao || '',
-        parsedVideos.map((v) => v.title)
-      )
-      if (nichoResult) {
-        enrichedData.nichoInferido = `${nichoResult.nicho} > ${nichoResult.subNicho}`
-      }
       const nichoData =
         rpmENichoDoRotulo(enrichedData.nichoInferido) ??
         rpmENichoDoRotulo(existing?.nichoInferido) ??
         undefined
 
       if (topVideos.length > 0) {
+        const dates = parsedVideos
+          .map((v) => v.pubDate)
+          .filter(Boolean) as Date[]
         const oldestPub = dates.length
           ? new Date(Math.min(...dates.map((d) => d.getTime())))
           : null

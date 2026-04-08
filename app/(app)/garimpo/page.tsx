@@ -36,6 +36,12 @@ import {
   RECENCIA_PUBLICACAO_OPCOES,
   type RecenciaDias,
 } from '@/lib/garimpo-recencia-label'
+import {
+  GARIMPO_VIDEOS_CANAL_FAIXAS,
+  normalizarFaixaVideosCanalSalva,
+  faixaVideosCanalParaApi,
+  type GarimpoVideosCanalFaixaId,
+} from '@/lib/garimpo-videos-canal-faixas'
 
 const MIN_VIEWS_SLIDER = 5_000
 const MAX_MIN_VIEWS_SLIDER = 10_000_000
@@ -59,6 +65,8 @@ function GarimpoPageContent() {
   const [query, setQuery] = useState('')
   const [minViews, setMinViews] = useState(15_000)
   const [maxInscritos, setMaxInscritos] = useState(1_000)
+  const [videosCanalFaixa, setVideosCanalFaixa] =
+    useState<GarimpoVideosCanalFaixaId>('qualquer')
   const [dias, setDias] = useState<RecenciaDias>(30)
   const [filtrosHydrated, setFiltrosHydrated] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -77,6 +85,7 @@ function GarimpoPageContent() {
     if (saved) {
       setMinViews(clamp(saved.minViews, MIN_VIEWS_SLIDER, MAX_MIN_VIEWS_SLIDER))
       setMaxInscritos(clamp(saved.maxInscritos, MIN_INSCRITOS_SLIDER, MAX_INSCRITOS_SLIDER))
+      setVideosCanalFaixa(normalizarFaixaVideosCanalSalva(saved.videosCanalFaixa))
       setDias(saved.dias as RecenciaDias)
       if (typeof saved.filtersOpen === 'boolean') setFiltersOpen(saved.filtersOpen)
       if (saved.query != null) setQuery(saved.query.slice(0, QUERY_MAX_LEN))
@@ -115,11 +124,12 @@ function GarimpoPageContent() {
     salvarFiltrosGarimpo({
       minViews,
       maxInscritos,
+      videosCanalFaixa,
       dias,
       filtersOpen,
       query: query.slice(0, QUERY_MAX_LEN),
     })
-  }, [filtrosHydrated, minViews, maxInscritos, dias, filtersOpen, query])
+  }, [filtrosHydrated, minViews, maxInscritos, videosCanalFaixa, dias, filtersOpen, query])
 
   useEffect(() => {
     if (results.length === 0) return
@@ -152,6 +162,11 @@ function GarimpoPageContent() {
     return Math.max(0, ...results.map((r) => r.canal.totalViews ?? 0))
   }, [results])
 
+  const videosCanalApi = useMemo(
+    () => faixaVideosCanalParaApi(videosCanalFaixa),
+    [videosCanalFaixa]
+  )
+
   async function handleSearch() {
     if (!query.trim()) {
       toast.error('Digite um termo ou URL do YouTube.')
@@ -169,6 +184,8 @@ function GarimpoPageContent() {
           query: query.trim(),
           minViews,
           maxInscritos,
+          maxVideosCanal: videosCanalApi.maxVideosCanal,
+          minVideosCanal: videosCanalApi.minVideosCanal,
           diasPublicacao: dias,
           continuation: null,
           seedVideoId: null,
@@ -209,6 +226,8 @@ function GarimpoPageContent() {
           query: query.trim(),
           minViews,
           maxInscritos,
+          maxVideosCanal: videosCanalApi.maxVideosCanal,
+          minVideosCanal: videosCanalApi.minVideosCanal,
           diasPublicacao: dias,
           continuation,
           seedVideoId,
@@ -379,6 +398,43 @@ function GarimpoPageContent() {
                       max={MAX_INSCRITOS_SLIDER}
                       step={STEP_INSCRITOS}
                     />
+                  </div>
+
+                  {/* Tamanho do canal (vídeos públicos) */}
+                  <div className="space-y-3 sm:col-span-2">
+                    <div>
+                      <label className="flex items-center gap-1.5 text-xs font-medium text-[#aaaaaa]">
+                        <Clapperboard className="h-3.5 w-3.5" />
+                        Tamanho do canal
+                      </label>
+                      <p className="mt-1 text-[10px] leading-snug text-[#5c5c5c]">
+                        Use uma faixa para focar em canais pequenos (poucos vídeos no
+                        total) ou grandes (mais de 100). Só vale quando o YouTube mostra
+                        o número de vídeos na página do canal.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+                      {GARIMPO_VIDEOS_CANAL_FAIXAS.map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setVideosCanalFaixa(opt.id)}
+                          className={cn(
+                            'rounded-lg border px-3 py-2.5 text-left transition-colors',
+                            videosCanalFaixa === opt.id
+                              ? 'border-[rgba(232,169,58,0.45)] bg-gp-gold/15 text-gp-gold'
+                              : 'border-white/[0.1] bg-gp-bg3/80 text-gp-text2 hover:border-white/[0.18] hover:text-gp-text'
+                          )}
+                        >
+                          <span className="block text-xs font-semibold text-gp-text">
+                            {opt.titulo}
+                          </span>
+                          <span className="mt-0.5 block text-[10px] leading-tight opacity-85">
+                            {opt.subtitulo}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Recência: dias / meses (mapeadas às faixas do YouTube) */}

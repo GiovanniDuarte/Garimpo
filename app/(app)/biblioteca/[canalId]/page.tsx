@@ -36,6 +36,8 @@ import { buttonVariants } from '@/components/ui/button'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import type { CanalStatus, GemScoreDetalhado } from '@/types'
+import { rpmENichoDoRotulo } from '@/lib/nichos'
+import { nichoBonusAPartirDeteccao } from '@/lib/scoring/gem-score'
 import {
   calcularIdadeCanal,
   resolverDataReferenciaIdadeCanal,
@@ -205,7 +207,7 @@ export default function CanalDetailPage({
   let gemScore: GemScoreDetalhado | null = null
   if (canal.gemScoreDetalhado) {
     try {
-      const parsed = JSON.parse(canal.gemScoreDetalhado)
+      const parsed = JSON.parse(canal.gemScoreDetalhado) as GemScoreDetalhado
       if (
         parsed?.total != null &&
         parsed?.classificacao &&
@@ -215,6 +217,19 @@ export default function CanalDetailPage({
       }
     } catch {
       // invalid
+    }
+  }
+  if (
+    gemScore &&
+    !gemScore.nichoBonus &&
+    canal.nichoInferido?.trim()
+  ) {
+    const nicho = rpmENichoDoRotulo(canal.nichoInferido)
+    if (nicho) {
+      gemScore = {
+        ...gemScore,
+        nichoBonus: nichoBonusAPartirDeteccao(nicho),
+      }
     }
   }
 
@@ -530,7 +545,7 @@ export default function CanalDetailPage({
               Formato <span className="font-medium text-gp-text2">Categoria &gt; Subnicho</span>{' '}
               (nomes exatos da taxonomia interna) para o RPM estimado no Gem coincidir com o
               nicho. Na <strong className="font-medium text-gp-text2">Atualizar</strong>, a
-              classificação usa descrição + títulos dos vídeos recentes.
+              classificação usa títulos + tags dos 5 vídeos mais vistos.
             </p>
           </section>
 

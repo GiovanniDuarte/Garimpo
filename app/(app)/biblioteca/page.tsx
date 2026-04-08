@@ -13,8 +13,19 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Library, RefreshCw, Loader2, Trash2, Search, Users, Eye } from 'lucide-react'
+import {
+  Library,
+  RefreshCw,
+  Loader2,
+  Trash2,
+  Search,
+  Users,
+  Eye,
+  Link2,
+  Plus,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import type { CanalStatus, GemScoreDetalhado, PotencialModelagem } from '@/types'
@@ -69,6 +80,8 @@ export default function BibliotecaPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [orderBy, setOrderBy] = useState<string>('criadoEm')
   const [searchQuery, setSearchQuery] = useState('')
+  const [channelUrlInput, setChannelUrlInput] = useState('')
+  const [savingByUrl, setSavingByUrl] = useState(false)
   const [filtrosHydrated, setFiltrosHydrated] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string
@@ -139,6 +152,38 @@ export default function BibliotecaPage() {
     }
   }
 
+  async function handleAddChannelByUrl() {
+    const url = channelUrlInput.trim()
+    if (!url) {
+      toast.error('Cole uma URL de canal/vídeo do YouTube.')
+      return
+    }
+    setSavingByUrl(true)
+    try {
+      const res = await fetch('/api/canais', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(
+          typeof data.error === 'string'
+            ? data.error
+            : 'Não foi possível salvar este canal.'
+        )
+        return
+      }
+      toast.success(`Canal "${data.nome}" salvo na biblioteca.`)
+      setChannelUrlInput('')
+      await fetchCanais()
+    } catch {
+      toast.error('Erro de rede ao salvar canal.')
+    } finally {
+      setSavingByUrl(false)
+    }
+  }
+
   const filteredCanais = canais.filter((canal) =>
     canal.nome.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -184,6 +229,36 @@ export default function BibliotecaPage() {
       />
       <PageWrapper>
         <div className="space-y-5">
+          <div className="rounded-xl border border-[#272727] bg-[#181818] p-3">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex h-10 min-h-10 flex-1 items-center gap-2 rounded-full border border-[#303030] bg-[#121212] px-4 transition-colors focus-within:border-[#717171]">
+                <Link2 className="h-4 w-4 shrink-0 text-[#aaaaaa]" />
+                <Input
+                  placeholder="Adicionar canal por URL (canal ou vídeo do YouTube)"
+                  value={channelUrlInput}
+                  onChange={(e) => setChannelUrlInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && void handleAddChannelByUrl()}
+                  className="h-9 border-0 bg-transparent p-0 text-sm text-white placeholder:text-[#717171] focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+              </div>
+              <Button
+                type="button"
+                onClick={() => void handleAddChannelByUrl()}
+                disabled={savingByUrl}
+                className="h-10 min-h-10 rounded-full px-4"
+              >
+                {savingByUrl ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Plus className="mr-1 h-4 w-4" />
+                    Adicionar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex h-10 min-h-10 flex-1 items-center gap-2 rounded-full border border-[#303030] bg-[#121212] px-4 transition-colors focus-within:border-[#717171]">
               <Search className="h-4 w-4 shrink-0 text-[#aaaaaa]" />
