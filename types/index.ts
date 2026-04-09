@@ -53,6 +53,17 @@ export interface GemScoreDetalhado {
   resumoRodape?: string[]
   /** Aviso contextual (ex.: aceleração baixa). */
   insight?: string
+  /**
+   * Qualidade da amostra usada no Gem (especialmente útil quando há poucos vídeos observados).
+   * Pode aplicar um ajuste leve no total para reduzir overfitting de 1 vídeo.
+   */
+  confiancaAmostra?: {
+    indice: number
+    nivel: 'baixa' | 'media' | 'alta'
+    videosAmostra: number
+    videosReferencia: number | null
+    fatorAjuste: number
+  }
   nichoBonus?: {
     rpmMedio: number
     viralidade: number

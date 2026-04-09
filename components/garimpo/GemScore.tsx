@@ -283,6 +283,11 @@ function GemScorePanelV3({
             >
               {tier.label}
             </span>
+            {score.confiancaAmostra && (
+              <span className="inline-flex items-center gap-1 rounded border border-white/[0.12] bg-gp-bg4 px-2 py-0.5 font-heading text-[10px] font-semibold uppercase tracking-[0.06em] text-gp-text2">
+                Confiança {score.confiancaAmostra.indice}%
+              </span>
+            )}
           </div>
           <p className="max-w-[480px] text-[13px] leading-relaxed text-gp-text2">
             Quatro sinais que eliminam ruído e revelam canais com tração real,

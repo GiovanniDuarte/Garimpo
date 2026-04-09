@@ -295,6 +295,41 @@ function insightV3(sinais: GemScoreSinaisV3): string | undefined {
   return partes.length > 0 ? partes.join(' ') : undefined
 }
 
+function calcularConfiancaAmostra(
+  nSample: number,
+  videosReferencia: number | null
+): NonNullable<GemScoreDetalhado['confiancaAmostra']> {
+  const n = Math.max(0, nSample)
+  const ref =
+    videosReferencia != null && Number.isFinite(videosReferencia) && videosReferencia > 0
+      ? Math.floor(videosReferencia)
+      : null
+  if (n >= 4) {
+    return {
+      indice: 100,
+      nivel: 'alta',
+      videosAmostra: n,
+      videosReferencia: ref,
+      fatorAjuste: 1,
+    }
+  }
+
+  const cobertura = ref != null ? Math.min(1, n / Math.max(1, ref)) : Math.min(1, n / 4)
+  const forcaAmostra = Math.min(1, n / 4)
+  const indice01 = Math.max(0.15, Math.min(1, forcaAmostra * 0.6 + cobertura * 0.4))
+  const fatorAjuste = Math.max(0.82, Math.min(1, 0.82 + indice01 * 0.18))
+  const indice = Math.round(indice01 * 100)
+  const nivel: 'baixa' | 'media' | 'alta' =
+    indice >= 75 ? 'alta' : indice >= 45 ? 'media' : 'baixa'
+  return {
+    indice,
+    nivel,
+    videosAmostra: n,
+    videosReferencia: ref,
+    fatorAjuste: round1(fatorAjuste),
+  }
+}
+
 /**
  * Gem Score v3 — quatro sinais (máx. 100 antes do bónus MPM).
  */
@@ -349,8 +384,20 @@ export function calcularGemScore(
     densidade.pontos +
     pressao.pontos
 
+  const videosReferencia =
+    pubYt != null && pubYt > 0
+      ? pubYt
+      : canal.videoCountCanal > 0
+        ? canal.videoCountCanal
+        : null
+  const confiancaAmostra = calcularConfiancaAmostra(nSample, videosReferencia)
+  const totalBaseAjustado =
+    confiancaAmostra.fatorAjuste < 1
+      ? Math.round(totalBase * confiancaAmostra.fatorAjuste)
+      : totalBase
+
   const pontosMpm = pontosBonusMpm(mpmIndice)
-  const total = Math.min(100, totalBase + pontosMpm)
+  const total = Math.min(100, totalBaseAjustado + pontosMpm)
 
   const classificacao =
     total >= 75
@@ -372,9 +419,22 @@ export function calcularGemScore(
       `${densidade.pct}%`,
       formatCompactPt(pressao.viewsPorDiaPorVideo),
     ],
+    confiancaAmostra,
   }
 
-  const ins = insightV3(sinais)
+  const insBase = insightV3(sinais)
+  let ins = insBase ?? ''
+  if (confiancaAmostra.fatorAjuste < 0.97) {
+    const refTxt =
+      confiancaAmostra.videosReferencia != null
+        ? `${confiancaAmostra.videosAmostra}/${confiancaAmostra.videosReferencia}`
+        : String(confiancaAmostra.videosAmostra)
+    const txt =
+      `Amostra parcial (${refTxt} vídeo${confiancaAmostra.videosAmostra === 1 ? '' : 's'}) — ` +
+      `score ajustado por confiança (${Math.round(confiancaAmostra.fatorAjuste * 100)}%).`
+    ins = ins ? `${ins} ${txt}` : txt
+  }
+  ins = ins.trim()
   if (ins) result.insight = ins
 
   if (pontosMpm > 0 && mpmIndice != null && !isNaN(mpmIndice)) {

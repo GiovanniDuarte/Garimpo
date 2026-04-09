@@ -450,6 +450,13 @@ export async function getChannelInfo(channelId: string): Promise<ChannelInfo> {
           }
         }
       }
+      const aboutVm = findAboutChannelViewModel(aboutData)
+      if (aboutVm?.videoCountText) {
+        const vcAbout = parseVideoCountFromAboutText(aboutVm.videoCountText)
+        if (vcAbout > 0) {
+          videoCount = Math.max(videoCount, vcAbout)
+        }
+      }
     }
   } catch {
     // ignore
@@ -688,9 +695,16 @@ function findAboutChannelViewModel(
 
 function parseVideoCountFromAboutText(text: string): number {
   if (!text) return 0
-  const m = text.match(/([\d,]+)\s*videos?/i)
+  const m = text.match(/([\d.,]+)\s*([KMB])?\s*videos?/i)
   if (!m) return 0
-  return parseInt(m[1].replace(/,/g, ''), 10)
+  let num = parseFloat(m[1].replace(/,/g, ''))
+  if (!Number.isFinite(num)) return 0
+  const mult = m[2]
+    ? ({ K: 1000, M: 1_000_000, B: 1_000_000_000 } as Record<string, number>)[
+        m[2].toUpperCase()
+      ] || 1
+    : 1
+  return Math.round(num * mult)
 }
 
 function parseSubscriberCount(text: string): number {

@@ -48,6 +48,12 @@ export type GarimpoEnrichFilterOpts = {
    * mas não aplica filtros listagem do Garimpo antes nem depois do fetch de canal.
    */
   apenasGem?: boolean
+  /**
+   * Mineirador: mín/máx de vídeos públicos no canal (contagem do `getChannelInfo`).
+   * Aplica-se **mesmo com** `apenasGem` — antes só era filtrado em `linhaPassaCaptura`.
+   */
+  capturaMinVideosCanal?: number
+  capturaMaxVideosCanal?: number | null
 }
 
 export type GarimpoEnrichProgress = {
@@ -208,6 +214,19 @@ export async function enrichSearchResults(
       }
     }
 
+    const capMinV = Math.max(0, Number(opts.capturaMinVideosCanal) || 0)
+    const capMaxRaw = opts.capturaMaxVideosCanal
+    const capMaxV =
+      capMaxRaw != null && Number.isFinite(Number(capMaxRaw))
+        ? Math.floor(Number(capMaxRaw))
+        : null
+    if (capMaxV != null && capMaxV > 0) {
+      if (!(videoCount > 0 && videoCount <= capMaxV)) continue
+    }
+    if (capMinV > 0) {
+      if (!(videoCount > 0 && videoCount >= capMinV)) continue
+    }
+
     const pubDate =
       (videoDetails != null &&
         parsePublishedDate(
@@ -279,7 +298,7 @@ export async function enrichSearchResults(
         inscritos: subs,
         thumbnailUrl: channelThumb,
         totalViews,
-        ...(pubYt != null ? { videosPublicados: pubYt } : {}),
+        videosPublicados: videoCount,
       },
       gemScore,
     })

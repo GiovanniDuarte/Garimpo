@@ -24,7 +24,7 @@ const links = [
   },
   {
     href: '/mineirador',
-    label: 'Mineirador',
+    label: 'Mineração',
     icon: Crosshair,
   },
 ]

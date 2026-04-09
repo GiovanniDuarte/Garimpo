@@ -65,6 +65,16 @@ export async function POST(req: NextRequest) {
       if (Number.isFinite(m) && m > 0) capturaMaxInscritos = m
     }
     const capturaCombinacao = body.capturaCombinacao === 'OU' ? 'OU' : 'E'
+    const capturaMinVideosCanal = Math.max(
+      0,
+      Math.floor(Number(body.capturaMinVideosCanal) || 0)
+    )
+    let capturaMaxVideosCanal: number | null = null
+    const rawMaxVid = body.capturaMaxVideosCanal
+    if (rawMaxVid != null && rawMaxVid !== '') {
+      const mv = Math.floor(Number(rawMaxVid))
+      if (Number.isFinite(mv) && mv > 0) capturaMaxVideosCanal = mv
+    }
 
     if (!rawUrl) {
       return NextResponse.json(
@@ -111,6 +121,8 @@ export async function POST(req: NextRequest) {
         exigirFiltroMetricas,
         capturaMinViews,
         capturaMaxInscritos,
+        capturaMinVideosCanal,
+        capturaMaxVideosCanal,
         capturaCombinacao,
         status: 'ativa',
       },

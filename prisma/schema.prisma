@@ -51,6 +51,8 @@ model Cacada {
   exigirFiltroMetricas     Boolean  @default(false)
   capturaMinViews          Int      @default(0)
   capturaMaxInscritos      Int?
+  capturaMinVideosCanal    Int      @default(0)
+  capturaMaxVideosCanal    Int?
   capturaCombinacao        String   @default("E")
   status                 String   @default("ativa")
   // Acumulado: vídeos que passaram pela pipeline Gem nesta corrida (soma por passo).

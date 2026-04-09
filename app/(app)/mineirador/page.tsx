@@ -71,6 +71,8 @@ type CacadaRow = {
   exigirFiltroMetricas?: boolean
   capturaMinViews?: number
   capturaMaxInscritos?: number | null
+  capturaMinVideosCanal?: number
+  capturaMaxVideosCanal?: number | null
   capturaCombinacao?: string
   status: string
   /** Acumulado de vídeos analisados (Gem) em todos os passos desta corrida. */
@@ -87,6 +89,8 @@ function regrasResumoFromRow(c: CacadaRow): string {
     minGem: c.minGem,
     capturaMinViews: c.capturaMinViews ?? 0,
     capturaMaxInscritos: c.capturaMaxInscritos ?? null,
+    capturaMinVideosCanal: c.capturaMinVideosCanal ?? 0,
+    capturaMaxVideosCanal: c.capturaMaxVideosCanal ?? null,
     capturaCombinacao: c.capturaCombinacao ?? 'E',
   })
 }
@@ -192,6 +196,8 @@ function aplicarPresetMineiro(
     setExigirFiltro: (v: boolean) => void
     setCapturaMinViewsStr: (v: string) => void
     setCapturaMaxInscritosStr: (v: string) => void
+    setCapturaMinVideosCanalStr: (v: string) => void
+    setCapturaMaxVideosCanalStr: (v: string) => void
     setCapturaCombinacao: (v: 'E' | 'OU') => void
   }
 ) {
@@ -202,6 +208,8 @@ function aplicarPresetMineiro(
       setters.setExigirFiltro(true)
       setters.setCapturaMinViewsStr('10000')
       setters.setCapturaMaxInscritosStr('5000')
+      setters.setCapturaMinVideosCanalStr('')
+      setters.setCapturaMaxVideosCanalStr('')
       setters.setCapturaCombinacao('E')
       break
     case 'garimpo':
@@ -210,6 +218,8 @@ function aplicarPresetMineiro(
       setters.setExigirFiltro(true)
       setters.setCapturaMinViewsStr('15000')
       setters.setCapturaMaxInscritosStr('1000')
+      setters.setCapturaMinVideosCanalStr('')
+      setters.setCapturaMaxVideosCanalStr('')
       setters.setCapturaCombinacao('E')
       break
     case 'sniper':
@@ -218,6 +228,8 @@ function aplicarPresetMineiro(
       setters.setExigirFiltro(false)
       setters.setCapturaMinViewsStr('')
       setters.setCapturaMaxInscritosStr('')
+      setters.setCapturaMinVideosCanalStr('')
+      setters.setCapturaMaxVideosCanalStr('')
       setters.setCapturaCombinacao('E')
       break
     case 'micro':
@@ -226,6 +238,8 @@ function aplicarPresetMineiro(
       setters.setExigirFiltro(true)
       setters.setCapturaMinViewsStr('5000')
       setters.setCapturaMaxInscritosStr('3000')
+      setters.setCapturaMinVideosCanalStr('')
+      setters.setCapturaMaxVideosCanalStr('800')
       setters.setCapturaCombinacao('E')
       break
     default:
@@ -242,6 +256,8 @@ export default function MineiradorPage() {
   const [exigirFiltro, setExigirFiltro] = useState(false)
   const [capturaMinViewsStr, setCapturaMinViewsStr] = useState('')
   const [capturaMaxInscritosStr, setCapturaMaxInscritosStr] = useState('')
+  const [capturaMinVideosCanalStr, setCapturaMinVideosCanalStr] = useState('')
+  const [capturaMaxVideosCanalStr, setCapturaMaxVideosCanalStr] = useState('')
   const [capturaCombinacao, setCapturaCombinacao] = useState<'E' | 'OU'>('E')
   const [mainTab, setMainTab] = useState<'minerao' | 'historico'>('minerao')
   const [creating, setCreating] = useState(false)
@@ -323,6 +339,15 @@ export default function MineiradorPage() {
       const n = Math.floor(Number(capturaMaxInscritosStr) || 0)
       if (n > 0) maxS = n
     }
+    const minVid =
+      capturaMinVideosCanalStr.trim() === ''
+        ? 0
+        : Math.max(0, Math.floor(Number(capturaMinVideosCanalStr) || 0))
+    let maxVid: number | null = null
+    if (capturaMaxVideosCanalStr.trim() !== '') {
+      const nv = Math.floor(Number(capturaMaxVideosCanalStr) || 0)
+      if (nv > 0) maxVid = nv
+    }
     setCreating(true)
     try {
       const res = await fetch('/api/cacador', {
@@ -335,6 +360,8 @@ export default function MineiradorPage() {
           exigirFiltroMetricas: exigirFiltro,
           capturaMinViews: minV,
           capturaMaxInscritos: maxS,
+          capturaMinVideosCanal: minVid,
+          capturaMaxVideosCanal: maxVid,
           capturaCombinacao,
         }),
       })
@@ -548,7 +575,7 @@ export default function MineiradorPage() {
   return (
     <>
       <Header
-        title="Mineirador"
+        title="Mineração"
         description="Relacionados do vídeo de referência → Gem honesto por linha → biblioteca com tag mineirador. No automático, pausa aleatória entre passos (~10–28 s) para parecer navegação humana e reduzir risco de bloqueio."
       />
       <PageWrapper>
@@ -583,7 +610,10 @@ export default function MineiradorPage() {
             <p className="text-sm leading-relaxed text-[#aaaaaa]">
               Cada passo varre uma página de sugestões e calcula Gem com dados reais do vídeo + canal.
               Combina <span className="text-white">limiar de Gem</span> com{' '}
-              <span className="text-white">filtros de views / inscritos</span> (E ou OU). Os lotes são
+              <span className="text-white">
+                filtros de views, inscritos e vídeos no canal
+              </span>{' '}
+              (E ou OU). O nº de vídeos vem do mesmo dado já usado no Gem — sem pedido extra. Os lotes são
               ordenados a favor de <span className="text-white">Gem alto</span> e{' '}
               <span className="text-white">canal mais pequeno</span> no empate — onde costuma estar o
               upside. Capturas na{' '}
@@ -603,7 +633,11 @@ export default function MineiradorPage() {
                     { id: 'perola' as const, label: 'Pérola', hint: 'Gem 75+ · 10k views · ≤5k subs' },
                     { id: 'garimpo' as const, label: 'Como Garimpo', hint: '70+ · 15k views · ≤1k subs' },
                     { id: 'sniper' as const, label: 'Sniper Gem', hint: '82+ · só Gem' },
-                    { id: 'micro' as const, label: 'Micro-nicho', hint: '68+ · 5k views · ≤3k subs' },
+                    {
+                      id: 'micro' as const,
+                      label: 'Micro-nicho',
+                      hint: '68+ · 5k views · ≤3k subs · ≤800 vídeos no canal',
+                    },
                   ] as const
                 ).map((p) => (
                   <Button
@@ -620,6 +654,8 @@ export default function MineiradorPage() {
                         setExigirFiltro,
                         setCapturaMinViewsStr,
                         setCapturaMaxInscritosStr,
+                        setCapturaMinVideosCanalStr,
+                        setCapturaMaxVideosCanalStr,
                         setCapturaCombinacao,
                       })
                       toast.message(`${p.label}: regras aplicadas. Confere antes de iniciar.`)
@@ -700,43 +736,81 @@ export default function MineiradorPage() {
                             <span className="font-medium leading-tight">
                               Métricas
                               <span className="mt-0.5 hidden font-normal text-[#717171] sm:block sm:text-[10px]">
-                                Views vídeo · teto inscritos
+                                Views · inscritos · vídeos no canal
                               </span>
                             </span>
                           </label>
                           {exigirFiltro ? (
-                            <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
-                              <div className="space-y-1">
-                                <Label className="text-[10px] text-[#717171]">
-                                  Views mín.
-                                </Label>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  inputMode="numeric"
-                                  placeholder="0"
-                                  value={capturaMinViewsStr}
-                                  onChange={(e) =>
-                                    setCapturaMinViewsStr(e.target.value)
-                                  }
-                                  className="h-9 border-[#303030] bg-[#181818] px-2 text-sm text-white"
-                                />
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-[#717171]">
+                                    Views mín.
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    inputMode="numeric"
+                                    placeholder="0"
+                                    value={capturaMinViewsStr}
+                                    onChange={(e) =>
+                                      setCapturaMinViewsStr(e.target.value)
+                                    }
+                                    className="h-9 border-[#303030] bg-[#181818] px-2 text-sm text-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-[#717171]">
+                                    Insc. máx.
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    inputMode="numeric"
+                                    placeholder="∞"
+                                    value={capturaMaxInscritosStr}
+                                    onChange={(e) =>
+                                      setCapturaMaxInscritosStr(e.target.value)
+                                    }
+                                    className="h-9 border-[#303030] bg-[#181818] px-2 text-sm text-white"
+                                  />
+                                </div>
                               </div>
-                              <div className="space-y-1">
-                                <Label className="text-[10px] text-[#717171]">
-                                  Insc. máx.
-                                </Label>
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  inputMode="numeric"
-                                  placeholder="∞"
-                                  value={capturaMaxInscritosStr}
-                                  onChange={(e) =>
-                                    setCapturaMaxInscritosStr(e.target.value)
-                                  }
-                                  className="h-9 border-[#303030] bg-[#181818] px-2 text-sm text-white"
-                                />
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-[#717171]">
+                                    Víd. mín. (canal)
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    inputMode="numeric"
+                                    placeholder="0"
+                                    title="Mínimo de vídeos públicos no canal (já obtido no passo Gem)"
+                                    value={capturaMinVideosCanalStr}
+                                    onChange={(e) =>
+                                      setCapturaMinVideosCanalStr(e.target.value)
+                                    }
+                                    className="h-9 border-[#303030] bg-[#181818] px-2 text-sm text-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-[#717171]">
+                                    Víd. máx. (canal)
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    inputMode="numeric"
+                                    placeholder="∞"
+                                    title="Teto de vídeos públicos no canal (micro-canais)"
+                                    value={capturaMaxVideosCanalStr}
+                                    onChange={(e) =>
+                                      setCapturaMaxVideosCanalStr(e.target.value)
+                                    }
+                                    className="h-9 border-[#303030] bg-[#181818] px-2 text-sm text-white"
+                                  />
+                                </div>
                               </div>
                             </div>
                           ) : null}

@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Star, Users, Eye, Loader2, X } from 'lucide-react'
+import { Star, StarOff, Users, Eye, Video, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { PotencialModelagem } from '@/types'
 import {
@@ -268,7 +268,7 @@ export default function FavoritosPage() {
                           </span>
                         )}
                       </div>
-                      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <ul className="flex flex-col gap-2">
                         {lista.map((canal) => (
                           <CanalFavoritoRow
                             key={canal.id}
@@ -350,10 +350,22 @@ function CanalFavoritoRow({
                 {formatNum(canal.totalViews)}
               </span>
             )}
+            <span
+              className="inline-flex items-center gap-1 whitespace-nowrap tabular-nums"
+              title="Vídeos públicos no canal (YouTube), quando disponível na base"
+            >
+              <Video
+                className="size-[11px] shrink-0 stroke-[2.25]"
+                aria-hidden
+              />
+              {canal.videosPublicados != null && canal.videosPublicados > 0
+                ? formatNum(canal.videosPublicados)
+                : 'sem dados'}
+            </span>
           </div>
         </div>
       </Link>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-col items-stretch gap-1 sm:flex-row sm:items-center">
         <button
           type="button"
           onClick={(e) => {
@@ -361,14 +373,16 @@ function CanalFavoritoRow({
             onRemove()
           }}
           disabled={removing}
-          className="rounded-full p-2 text-gp-gold transition-colors hover:bg-gp-gold/15 disabled:opacity-40"
+          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border border-[#303030] bg-[#121212] px-3 py-1.5 text-[11px] font-medium text-[#aaaaaa] transition-colors hover:border-red-500/35 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
           title="Remover dos favoritos"
         >
           {removing ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-3.5 shrink-0 animate-spin" />
           ) : (
-            <Star className="size-[18px] fill-gp-gold text-gp-gold" />
+            <StarOff className="size-3.5 shrink-0" aria-hidden />
           )}
+          <span className="hidden sm:inline">Remover dos favoritos</span>
+          <span className="sm:hidden">Remover</span>
         </button>
       </div>
     </li>
@@ -379,7 +393,7 @@ function FavoritosSkeleton() {
   return (
     <div className="space-y-4">
       <Skeleton className="h-24 w-full rounded-xl bg-[#272727]" />
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="flex flex-col gap-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-[72px] w-full rounded-xl bg-[#272727]" />
         ))}

@@ -108,6 +108,8 @@ export async function executarPassoCacada(
         ...CACADA_PRATELEIRA_ENRICH,
         seenVideoIds: new Set<string>(),
         excludeChannelId: refChannel,
+        capturaMinVideosCanal: cacada.capturaMinVideosCanal ?? 0,
+        capturaMaxVideosCanal: cacada.capturaMaxVideosCanal ?? null,
       },
       channelTotalViews,
       {
@@ -149,6 +151,8 @@ export async function executarPassoCacada(
   const exigirFiltroMetricas = cacada.exigirFiltroMetricas === true
   const capturaMinViews = cacada.capturaMinViews ?? 0
   const capturaMaxInscritos = cacada.capturaMaxInscritos ?? null
+  const capturaMinVideosCanal = cacada.capturaMinVideosCanal ?? 0
+  const capturaMaxVideosCanal = cacada.capturaMaxVideosCanal ?? null
   const capturaCombinacaoStr = cacada.capturaCombinacao ?? 'E'
   const regras: CacadaRegrasCaptura = {
     exigirGem,
@@ -156,6 +160,8 @@ export async function executarPassoCacada(
     minGem: minG,
     capturaMinViews,
     capturaMaxInscritos,
+    capturaMinVideosCanal,
+    capturaMaxVideosCanal,
     capturaCombinacao: capturaCombinacaoStr === 'OU' ? 'OU' : 'E',
     refChannelId: refChannel,
   }
@@ -165,6 +171,8 @@ export async function executarPassoCacada(
     minGem: minG,
     capturaMinViews,
     capturaMaxInscritos,
+    capturaMinVideosCanal,
+    capturaMaxVideosCanal,
     capturaCombinacao: capturaCombinacaoStr,
   })
 
