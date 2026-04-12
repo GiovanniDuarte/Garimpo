@@ -1,7 +1,10 @@
-import { readFile, unlink } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { NextRequest, NextResponse } from 'next/server'
 import { buscarCanal, atualizarCanal } from '@/lib/db/queries'
-import { getMochilaZipPath } from '@/lib/mochila/paths'
+import {
+  apagarMochilaZipSeExistir,
+  getMochilaZipPath,
+} from '@/lib/mochila/paths'
 import { gerarMochilaZip } from '@/lib/mochila/build-zip'
 
 export const runtime = 'nodejs'
@@ -33,6 +36,8 @@ export async function GET(
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="mochila-${safeName}.zip"`,
         'Content-Length': String(buf.length),
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        Pragma: 'no-cache',
       },
     })
   } catch {
@@ -84,11 +89,12 @@ export async function POST(
   }
 
   const zipPath = getMochilaZipPath(id)
+  await apagarMochilaZipSeExistir(id)
   try {
     await gerarMochilaZip(zipPath, canal.nome, slice)
   } catch (e) {
     console.error('Mochila zip error:', e)
-    await unlink(zipPath).catch(() => {})
+    await apagarMochilaZipSeExistir(id)
     const hint =
       e instanceof Error ? e.message : 'Erro desconhecido ao criar o arquivo.'
     return NextResponse.json(

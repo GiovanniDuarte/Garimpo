@@ -281,6 +281,10 @@ export default function CanalDetailPage({
 
   const maxTopViews = topVideos[0]?.views ?? 0
 
+  const mochilaZipHref = `/api/canais/${canalId}/mochila?v=${
+    canal.mochilaAt ? new Date(canal.mochilaAt).getTime() : 0
+  }`
+
   const idadeCanal = dataRefIdade ? calcularIdadeCanal(dataRefIdade) : null
   const idadeHint = canal.dataCriacaoCanal
     ? 'Desde a data de criação do canal no YouTube (join).'
@@ -330,7 +334,7 @@ export default function CanalDetailPage({
           <div className="flex flex-wrap items-center justify-end gap-2">
             {canal.mochilaAt && (
               <a
-                href={`/api/canais/${canalId}/mochila`}
+                href={mochilaZipHref}
                 download
                 className={cn(
                   buttonVariants({ variant: 'default', size: 'sm' }),
@@ -651,22 +655,21 @@ export default function CanalDetailPage({
                 <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
                   .zip
                 </code>{' '}
-                com os teus vídeos mais vistos na biblioteca. Cada pasta chama-se{' '}
-                <strong className="text-gp-text">título do vídeo — id</strong>, com{' '}
+                com os teus vídeos mais vistos na biblioteca. Na raiz do ZIP há um{' '}
                 <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
-                  ficha.txt
-                </code>
-                ,{' '}
-                <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
-                  roteiro.txt
-                </code>
-                ,{' '}
-                <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
-                  comentarios_top16.txt
+                  .txt
                 </code>{' '}
-                (16 comentários com mais curtidas) e{' '}
+                por vídeo (
+                <strong className="text-gp-text">título do vídeo — id.txt</strong>
+                ), sem pastas: dentro de cada ficheiro vão as secções FICHA, ROTEIRO,
+                COMENTÁRIOS (16 com mais curtidas) e THUMBNAIL. A imagem da thumbnail
+                também é baixada e incluída no ZIP como{' '}
                 <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
-                  thumbnail
+                  __thumbnail.jpg
+                </code>{' '}
+                ou{' '}
+                <code className="gp-mono-nums rounded bg-gp-bg4 px-1 py-0.5 text-[11px] text-gp-gold">
+                  .webp
                 </code>
                 . Dados via InnerTube. Ao gerar de novo, o ZIP anterior é substituído.
               </p>
@@ -715,7 +718,7 @@ export default function CanalDetailPage({
               </Button>
               {canal.mochilaAt && (
                 <a
-                  href={`/api/canais/${canalId}/mochila`}
+                  href={mochilaZipHref}
                   download
                   className={cn(
                     buttonVariants({ variant: 'outline', size: 'sm' }),
